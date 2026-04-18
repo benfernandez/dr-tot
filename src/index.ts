@@ -1,26 +1,22 @@
-import { Telegraf } from 'telegraf';
 import { config } from './config';
-import { registerHandlers } from './bot/handlers';
+import { startWebhookServer } from './web/webhook-server';
 import { startScheduler } from './proactive/scheduler';
+import { buildMessageRouter } from './messaging/router';
 
 async function main() {
-  const bot = new Telegraf(config.telegramToken);
+  const router = buildMessageRouter();
+  const app = await startWebhookServer({ port: config.port, router });
+  startScheduler(router);
 
-  registerHandlers(bot);
-  startScheduler(bot);
+  console.log(`Dr. Tot listening on :${config.port}`);
 
-  console.log('Dr. Tot is starting…');
-  bot.launch({ dropPendingUpdates: true }).catch((err) => console.error('bot stopped', err));
-  const me = await bot.telegram.getMe();
-  console.log(`Dr. Tot is live as @${me.username}`);
-
-  const shutdown = (sig: string) => {
+  const shutdown = async (sig: string) => {
     console.log(`${sig} received, stopping…`);
-    bot.stop(sig);
+    await app.close();
     process.exit(0);
   };
-  process.once('SIGINT', () => shutdown('SIGINT'));
-  process.once('SIGTERM', () => shutdown('SIGTERM'));
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
 }
 
 main().catch((err) => {

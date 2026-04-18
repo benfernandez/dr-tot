@@ -5,7 +5,6 @@ export type MessageRole = 'user' | 'assistant' | 'proactive';
 export interface Message {
   id: string;
   user_id: string;
-  telegram_id: string;
   role: MessageRole;
   content: string;
   checkin_type: string | null;
@@ -14,14 +13,12 @@ export interface Message {
 
 export async function addMessage(
   userId: string,
-  telegramId: string,
   role: MessageRole,
   content: string,
   checkinType?: string,
 ): Promise<void> {
   const { error } = await supabase.from('messages').insert({
     user_id: userId,
-    telegram_id: telegramId,
     role,
     content,
     checkin_type: checkinType ?? null,
@@ -57,4 +54,16 @@ export async function minutesSinceLastUserMessage(userId: string): Promise<numbe
   const last = data?.[0]?.created_at;
   if (!last) return null;
   return (Date.now() - new Date(last).getTime()) / 60000;
+}
+
+export async function markInboundSeen(
+  provider: string,
+  providerMessageId: string,
+): Promise<boolean> {
+  const { error } = await supabase
+    .from('inbound_messages_seen')
+    .insert({ provider, provider_message_id: providerMessageId });
+  if (!error) return true;
+  if ((error as { code?: string }).code === '23505') return false;
+  throw error;
 }

@@ -1,10 +1,10 @@
 import cron from 'node-cron';
-import { Telegraf } from 'telegraf';
 import { DateTime } from 'luxon';
 import { getActiveCheckinUsers, type User } from '../db/users';
-import { claimCheckin, getRecentCheckinPreviews } from '../db/checkins';
+import { claimCheckin, getRecentCheckinPreviews, recordCheckinPreview } from '../db/checkins';
 import { addMessage, minutesSinceLastUserMessage } from '../db/messages';
 import { generateMorningCheckin } from '../ai/checkin-generator';
+import type { MessageRouter } from '../messaging/router';
 
 const MORNING_HOUR = 8;
 const WINDOW_MINUTES = 30;
@@ -12,14 +12,12 @@ const WINDOW_MINUTES = 30;
 function isFrequencyAllowed(freq: User['checkin_frequency'], weekday: number): boolean {
   if (freq === 'none') return false;
   if (freq === 'full' || freq === 'moderate') return true;
-  // 'light' — a few times a week (Mon, Wed, Fri)
   return [1, 3, 5].includes(weekday);
 }
 
-async function maybeSendMorning(bot: Telegraf, user: User): Promise<void> {
+async function maybeSendMorning(router: MessageRouter, user: User): Promise<void> {
   const now = DateTime.now().setZone(user.timezone);
   if (!now.isValid) return;
-
   if (now.hour !== MORNING_HOUR) return;
   if (now.minute >= WINDOW_MINUTES) return;
 
@@ -32,24 +30,31 @@ async function maybeSendMorning(bot: Telegraf, user: User): Promise<void> {
   const localDate = now.toISODate();
   if (!localDate) return;
 
-  const recent = await getRecentCheckinPreviews(user.id, 5);
-  const message = await generateMorningCheckin(user, recent);
-  const claimed = await claimCheckin(user.id, 'morning', localDate, message);
+  // Claim-before-generate: duplicate workers during redeploy overlap can both
+  // enter this function; only one wins the DB insert and proceeds to pay for
+  // the Anthropic call.
+  const claimed = await claimCheckin(user.id, 'morning', localDate);
   if (!claimed) return;
 
+  const recent = await getRecentCheckinPreviews(user.id, 5);
+  const message = await generateMorningCheckin(user, recent);
+  await recordCheckinPreview(user.id, 'morning', localDate, message);
+
   try {
-    await bot.telegram.sendMessage(user.telegram_id, message);
-    await addMessage(user.id, user.telegram_id, 'proactive', message, 'morning');
+    await router.send({ to: user.phone_number, text: message });
+    await addMessage(user.id, 'proactive', message, 'morning');
   } catch (err) {
-    console.error(`send failed for ${user.telegram_id}`, err);
+    console.error(`send failed for ${user.phone_number}`, err);
   }
 }
 
-export function startScheduler(bot: Telegraf): void {
+export function startScheduler(router: MessageRouter): void {
   cron.schedule('*/5 * * * *', async () => {
     try {
       const users = await getActiveCheckinUsers();
-      await Promise.all(users.map((u) => maybeSendMorning(bot, u).catch((e) => console.error('checkin err', e))));
+      await Promise.all(
+        users.map((u) => maybeSendMorning(router, u).catch((e) => console.error('checkin err', e))),
+      );
     } catch (err) {
       console.error('scheduler tick failed', err);
     }
