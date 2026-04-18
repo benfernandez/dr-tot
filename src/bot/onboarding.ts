@@ -25,7 +25,7 @@ function kbd(items: string[], prefix: string, cols = 2) {
 export async function startOnboarding(ctx: Context, user: User): Promise<void> {
   await updateUser(user.id, { onboarding_step: 'medication', onboarding_data: {} });
   await ctx.reply(
-    `Hi${user.first_name ? ` ${user.first_name}` : ''}! I'm Dr. Tott, your AI nutritionist for GLP-1 medications. 👋\n\nWhich medication are you on?`,
+    `Hi${user.first_name ? ` ${user.first_name}` : ''}! I'm Dr. Tot, your AI nutritionist for GLP-1 medications. 👋\n\nWhich medication are you on?`,
     kbd(MEDICATIONS, 'med', 2),
   );
 }

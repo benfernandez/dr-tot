@@ -9,10 +9,10 @@ async function main() {
   registerHandlers(bot);
   startScheduler(bot);
 
-  console.log('Dr. Tott is starting…');
+  console.log('Dr. Tot is starting…');
   bot.launch({ dropPendingUpdates: true }).catch((err) => console.error('bot stopped', err));
   const me = await bot.telegram.getMe();
-  console.log(`Dr. Tott is live as @${me.username}`);
+  console.log(`Dr. Tot is live as @${me.username}`);
 
   const shutdown = (sig: string) => {
     console.log(`${sig} received, stopping…`);

@@ -1,4 +1,4 @@
-# Dr. Tott Roadmap
+# Dr. Tot Roadmap
 
 Living plan. Order is a recommendation, not a contract. Revise after each phase with real user feedback.
 
@@ -27,7 +27,7 @@ Goal: 5–10 real GLP-1 users texting the bot for 2 weeks. Measure: do they come
 - [ ] Set Telegram bot description/commands via @BotFather (so `/` menu autocompletes)
 - [ ] Manual QA: run through all 6 `/feeling` branches, confirm tone is friend-not-clinician
 - [ ] Run `/testcheckin` 5 times in a row — confirm check-ins don't repeat food ideas
-- [ ] Invite 5 friends on GLP-1s with a short "DM Dr. Tott, send feedback here" ask
+- [ ] Invite 5 friends on GLP-1s with a short "DM Dr. Tot, send feedback here" ask
 - [ ] Instrument daily/weekly active users — simple SQL query counting distinct `telegram_id` in `messages` per day
 - [ ] Capture quotes/complaints in a Notion doc — these drive Phase 2
 
@@ -125,7 +125,7 @@ Only if Phase 3 shows >30% trial→paid conversion.
 
 ## Open questions (decide as we go)
 
-1. **Branding:** "Dr. Tott" works for friend tier — re-evaluate for public launch. Legal review before taking payment from strangers on a "doctor" branded product.
+1. **Branding:** "Dr. Tot" works for friend tier — re-evaluate for public launch. Legal review before taking payment from strangers on a "doctor" branded product.
 2. **Liability:** at what point do we need a ToS, privacy policy, and disclaimer gate? Phase 3 (paid) at the latest.
 3. **Data retention:** do we let users export/delete all their data? Should be there before paid launch. GDPR-adjacent even if we don't market in EU.
 4. **Human-in-the-loop:** do we ever escalate to a real nutritionist (chat handoff) for edge cases? Unclear if worth it.

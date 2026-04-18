@@ -17,7 +17,7 @@ async function loadUser(ctx: Context): Promise<User | null> {
   return getOrCreateUser(String(from.id), from.username, from.first_name);
 }
 
-const HELP_TEXT = `I'm Dr. Tott — your AI nutritionist for GLP-1 medications.
+const HELP_TEXT = `I'm Dr. Tot — your AI nutritionist for GLP-1 medications.
 
 Just text me naturally. Ask about meals, side effects, what to eat on injection day, etc.
 

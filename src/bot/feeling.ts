@@ -16,7 +16,7 @@ const SYMPTOMS: Array<{ key: string; label: string; topic: string }> = [
   { key: 'low_appetite', label: '🥄 Can\'t eat much', topic: 'very low appetite, struggling to eat anything' },
 ];
 
-const FEELING_SYSTEM = `You are Dr. Tott, a warm AI nutritionist for GLP-1 medication users. A user tapped a symptom button. Give them:
+const FEELING_SYSTEM = `You are Dr. Tot, a warm AI nutritionist for GLP-1 medication users. A user tapped a symptom button. Give them:
 
 - 2–4 short sentences, plain text only (NO markdown, no bullets, no headers)
 - 2–3 concrete food/behavior tactics specific to their symptom and medication profile

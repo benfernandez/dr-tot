@@ -1,4 +1,4 @@
-# Dr. Tott
+# Dr. Tot
 
 AI nutritionist Telegram bot for GLP-1 medication users (Ozempic, Wegovy, Mounjaro, Zepbound).
 
@@ -37,7 +37,7 @@ Open Telegram, find your bot, send `/start`.
 ## What works
 
 - `/start` — 4-step onboarding (medication, side effects, goal, timezone)
-- Natural chat — Dr. Tott persona with prompt caching on system + user profile
+- Natural chat — Dr. Tot persona with prompt caching on system + user profile
 - Morning check-in at 8am local time, once per day, idempotent, avoids repeating recent check-ins
 - `/protein` — tap-to-log daily protein with running total + progress bar (target 90g)
 - `/feeling` — symptom triage for nausea, constipation, sulfur burps, fatigue, food noise, low appetite
@@ -65,4 +65,4 @@ Food photo analysis, injection day ritual + site rotation, NSV journal, weekly w
 
 ## Disclaimer
 
-Dr. Tott is not a doctor. No medical advice — for anything medical, talk to your prescriber.
+Dr. Tot is not a doctor. No medical advice — for anything medical, talk to your prescriber.

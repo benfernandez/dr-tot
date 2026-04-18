@@ -1,7 +1,7 @@
 {
-  "name": "dr-tott",
+  "name": "dr-tot",
   "version": "0.1.0",
-  "description": "Dr. Tott — AI nutritionist Telegram bot for GLP-1 users",
+  "description": "Dr. Tot — AI nutritionist Telegram bot for GLP-1 users",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
