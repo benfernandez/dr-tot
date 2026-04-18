@@ -53,10 +53,17 @@ Food photo analysis, injection day ritual + site rotation, NSV journal, weekly w
 
 ## Railway deploy
 
+Build + start are wired via `railway.json` (Nixpacks, `npm ci && npm run build` → `npm start`). Node 20 is pinned via `engines` and `.nvmrc`.
+
 1. Push to GitHub.
-2. Railway → New Project → Deploy from GitHub.
-3. Add the 4 env vars.
-4. Start command: `npm run build && npm start`.
+2. Railway → **New Project** → **Deploy from GitHub repo** → pick this repo.
+3. Settings → **Variables**, add:
+   - `TELEGRAM_BOT_TOKEN`
+   - `ANTHROPIC_API_KEY`
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+4. Deploy. The bot uses Telegram long-polling, so **don't** expose a public domain or a port — leave networking off. Restart policy is `ON_FAILURE` with up to 10 retries.
+5. Only run one instance at a time — Telegram's `getUpdates` conflicts with duplicate workers. If you redeploy and see `409 Conflict`, scale old replicas to 0.
 
 ## Models
 
