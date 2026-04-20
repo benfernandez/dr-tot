@@ -27,7 +27,38 @@ interface StartOpts {
 type JsonBody = { parsed: unknown; raw: string };
 
 export async function startWebhookServer(opts: StartOpts): Promise<FastifyInstance> {
-  const app = Fastify({ logger: { level: 'info' }, bodyLimit: 1 * 1024 * 1024 });
+  // Disable default request logging so we can filter out scanner / crawler
+  // noise. Public HTTP services on the internet attract a flood of 404s
+  // probing for .env, .git/config, /phpinfo.php, etc. — harmless but they
+  // drown out real signal. We reimplement logging below to only log routes
+  // we actually care about.
+  const app = Fastify({
+    logger: { level: 'info' },
+    disableRequestLogging: true,
+    bodyLimit: 1 * 1024 * 1024,
+  });
+
+  app.addHook('onResponse', (req, reply, done) => {
+    const s = reply.statusCode;
+    // Always log 5xx (our bugs) and successful interactions with our real
+    // routes. Drop 404s on unknown paths — they're scanner noise. 401s on
+    // webhook signature failures ARE worth keeping so we see if Sendblue or
+    // Stripe ever send us something we can't verify.
+    const isInteresting =
+      s >= 500 ||
+      s === 401 ||
+      (s < 400 && !req.url.startsWith('/404'));
+    if (!isInteresting) return done();
+    req.log.info(
+      { method: req.method, url: req.url, statusCode: s, responseTime: reply.elapsedTime },
+      'request',
+    );
+    done();
+  });
+
+  app.setNotFoundHandler((_req, reply) => {
+    reply.code(404).send({ error: 'not_found' });
+  });
 
   await app.register(cors, {
     origin: (origin, cb) => {
