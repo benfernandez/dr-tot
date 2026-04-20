@@ -18,7 +18,11 @@ export const config = {
 
   sendblueApiKey: required('SENDBLUE_API_KEY'),
   sendblueApiSecret: required('SENDBLUE_API_SECRET'),
-  sendblueSigningSecret: required('SENDBLUE_SIGNING_SECRET'),
+  sendblueFromNumber: required('SENDBLUE_FROM_NUMBER'),
+  // Optional. If set, inbound webhooks must carry the matching sb-signing-secret
+  // header. If not set, we skip verification and log a warning — fine for free-
+  // tier testing, tighten before paid launch.
+  sendblueSigningSecret: optional('SENDBLUE_SIGNING_SECRET', ''),
 
   publicAppUrl: optional('PUBLIC_APP_URL', 'https://drtot.app'),
   port: parseInt(optional('PORT', '3000'), 10),

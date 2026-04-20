@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type {
   Channel,
   InboundMessage,
@@ -7,36 +8,36 @@ import type {
 } from './provider';
 
 interface SendBlueSendResponse {
-  content: string;
-  status: string;
+  content?: string;
+  status?: string;
   error_code?: number | null;
   error_message?: string | null;
-  message_handle: string;
-  number: string;
+  message_handle?: string;
+  number?: string;
   service?: string;
   was_downgraded?: boolean;
 }
 
 interface SendBlueInboundPayload {
-  accountEmail?: string;
-  content?: string;
-  is_outbound?: boolean;
-  message_handle?: string;
-  date_sent?: string;
   from_number?: string;
-  number?: string;
-  was_downgraded?: boolean;
+  to_number?: string;
+  content?: string;
   media_url?: string | null;
   media_urls?: string[];
+  service?: string;
+  group_id?: string | null;
+  date_sent?: string;
+  // Outbound confirmations reuse the webhook — skip anything that looks outbound.
+  is_outbound?: boolean;
 }
 
-const SEND_URL = 'https://api.sendblue.co/api/send-message';
+const BASE_URL = 'https://api.sendblue.co';
 
 /**
  * SendBlue is the primary messaging backend. Messages are sent as iMessage
- * when the recipient is on iOS; if not, SendBlue internally downgrades to
- * SMS and flags `was_downgraded: true` in the response. We record that in
- * user.preferred_channel so future sends know what to expect.
+ * when the recipient is on iOS; when not, SendBlue cascades through RCS and
+ * then SMS. The `service` field on the response tells us what actually
+ * delivered — we mirror that into user.preferred_channel.
  */
 export class SendBlueProvider implements MessageProvider {
   readonly name = 'sendblue' as const;
@@ -44,25 +45,23 @@ export class SendBlueProvider implements MessageProvider {
   constructor(
     private readonly apiKeyId: string,
     private readonly apiSecretKey: string,
-    private readonly signingSecret: string,
+    private readonly fromNumber: string,
+    private readonly signingSecret: string | null,
   ) {}
 
   async send(msg: OutboundMessage): Promise<SendResult> {
     const body: Record<string, unknown> = {
       number: msg.to,
+      from_number: this.fromNumber,
       content: msg.text,
     };
     if (msg.mediaUrls && msg.mediaUrls.length > 0) {
       body.media_url = msg.mediaUrls[0];
     }
 
-    const res = await fetch(SEND_URL, {
+    const res = await fetch(`${BASE_URL}/api/send-message`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'sb-api-key-id': this.apiKeyId,
-        'sb-api-secret-key': this.apiSecretKey,
-      },
+      headers: this.authHeaders(),
       body: JSON.stringify(body),
     });
 
@@ -72,20 +71,33 @@ export class SendBlueProvider implements MessageProvider {
     }
 
     const data = (await res.json()) as SendBlueSendResponse;
-    const deliveredAs: Channel = data.was_downgraded || data.service === 'sms' ? 'sms' : 'imessage';
+    const deliveredAs: Channel = isIMessageService(data.service) ? 'imessage' : 'sms';
 
     return {
-      providerMessageId: data.message_handle,
+      providerMessageId: data.message_handle ?? synthId(msg.to, Date.now().toString(), msg.text),
       deliveredAs,
     };
   }
 
   /**
-   * SendBlue's model is a shared-secret header. Configure the secret in the
-   * SendBlue dashboard, match against the inbound `sb-signing-secret` header.
-   * Constant-time compare to avoid timing side channels.
+   * Fire-and-forget typing indicator. Swallows errors — UX-only, never blocks
+   * the main reply path. iMessage-only on SendBlue's side; SMS recipients
+   * see nothing, which is the expected graceful degradation.
    */
+  async sendTyping(to: string): Promise<void> {
+    try {
+      await fetch(`${BASE_URL}/api/send-typing-indicator`, {
+        method: 'POST',
+        headers: this.authHeaders(),
+        body: JSON.stringify({ number: to, from_number: this.fromNumber }),
+      });
+    } catch {
+      // Non-fatal, ignore.
+    }
+  }
+
   verifyWebhookSignature(_rawBody: string, headers: Record<string, string>): boolean {
+    if (!this.signingSecret) return true;
     const header = headers['sb-signing-secret'] ?? headers['Sb-Signing-Secret'] ?? '';
     return constantTimeEqual(header, this.signingSecret);
   }
@@ -95,8 +107,7 @@ export class SendBlueProvider implements MessageProvider {
     const p = payload as SendBlueInboundPayload;
 
     if (p.is_outbound) return null;
-    if (!p.content && !p.media_url && (!p.media_urls || p.media_urls.length === 0)) return null;
-    if (!p.from_number || !p.message_handle) return null;
+    if (!p.from_number) return null;
 
     const mediaUrls = Array.isArray(p.media_urls)
       ? p.media_urls
@@ -104,17 +115,47 @@ export class SendBlueProvider implements MessageProvider {
         ? [p.media_url]
         : [];
 
-    const channel: Channel = p.was_downgraded ? 'sms' : 'imessage';
+    if (!p.content && mediaUrls.length === 0) return null;
+
+    const channel: Channel = isIMessageService(p.service) ? 'imessage' : 'sms';
+    const dateSent = p.date_sent ?? new Date().toISOString();
 
     return {
       from: p.from_number,
       text: p.content ?? '',
       mediaUrls,
-      providerMessageId: p.message_handle,
-      receivedAt: p.date_sent ? new Date(p.date_sent) : new Date(),
+      providerMessageId: synthId(p.from_number, dateSent, p.content ?? mediaUrls[0] ?? ''),
+      receivedAt: new Date(dateSent),
       channel,
     };
   }
+
+  private authHeaders(): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      'sb-api-key-id': this.apiKeyId,
+      'sb-api-secret-key': this.apiSecretKey,
+    };
+  }
+}
+
+function isIMessageService(service: string | undefined): boolean {
+  return (service ?? '').toLowerCase() === 'imessage';
+}
+
+/**
+ * Sendblue's inbound webhook payload doesn't include a stable message ID.
+ * Derive a dedupe key from (from, timestamp, first 200 chars of content).
+ * Webhook retries replay the exact same payload, so hash matches — good.
+ */
+function synthId(from: string, dateSent: string, content: string): string {
+  return createHash('sha256')
+    .update(from)
+    .update('|')
+    .update(dateSent)
+    .update('|')
+    .update(content.slice(0, 200))
+    .digest('hex');
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {

@@ -3,8 +3,17 @@ import { buildMessageRouter } from '../messaging/router';
 import { normalizePhone } from '../db/users';
 
 /**
- * Admin tool: pre-authorize a friend's phone number, then text them a
+ * Admin tool: pre-authorize a friend's phone number and send them the
  * double-opt-in prompt. They must reply YES before Dr. Tot does anything else.
+ *
+ * ⚠️  SendBlue free tier blocks cold outbound — contacts have to text YOU
+ * first. On free tier this script will create the user row, but the initial
+ * send will fail. Share your Sendblue number with friends out of band
+ * ("text +1...") and let them text first. Once they do, the pipeline
+ * auto-provisions them and sends the opt-in prompt as a reply.
+ *
+ * On paid tiers (Blue Ocean / AI Agent) cold outbound works and this script
+ * becomes the primary onboarding path.
  *
  * Usage: npm run add-user -- +15551234567 "Alice"
  */

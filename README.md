@@ -18,7 +18,14 @@ AI nutrition companion for GLP-1 medication users (Ozempic, Wegovy, Mounjaro, Ze
 
 - **Anthropic key**: [console.anthropic.com](https://console.anthropic.com) → API Keys → create.
 - **Supabase project**: [supabase.com](https://supabase.com) → new project → copy Project URL + service_role key.
-- **SendBlue account**: [dashboard.sendblue.com](https://dashboard.sendblue.com) → provision a line → copy API key + secret. Configure a webhook pointing at `https://YOUR_DEPLOY_URL/webhooks/sendblue` with a signing secret.
+- **SendBlue account**: [dashboard.sendblue.com](https://dashboard.sendblue.com). Then from your terminal:
+  ```bash
+  npm install -g @sendblue/cli
+  sendblue login               # enter your Sendblue email + 8-digit OTP
+  sendblue show-keys           # prints apiKey + apiSecret
+  sendblue lines               # prints your assigned phone number
+  sendblue webhooks set-receive https://YOUR_DEPLOY_URL/webhooks/sendblue
+  ```
 
 ### 2. Install + configure
 
@@ -43,14 +50,22 @@ Build + start are wired via `railway.json` (Nixpacks, `npm ci && npm run build` 
 
 ### 5. Add your first users
 
-Dr. Tot doesn't take cold signups from random numbers — users must be pre-authorized by the admin (you). On deploy:
+**On SendBlue free tier:** contacts must text your Sendblue number first. You can't cold-text them.
 
+The flow:
+1. Share your Sendblue number with a friend out of band ("text this number: +1…").
+2. Friend texts the number (any message).
+3. Dr. Tot auto-creates their row and replies with the double-opt-in prompt.
+4. Friend replies YES → onboarding kicks off (4-6 conversational turns).
+5. Onboarding completes → morning check-ins turn on, full chat unlocks.
+
+**On paid tiers (Blue Ocean / AI Agent):** cold outbound works. Use:
 ```bash
-# Locally, with prod env vars in .env:
 npm run add-user -- +15551234567 "Alice"
 ```
+Dr. Tot texts them first with the opt-in prompt.
 
-That sends the double-opt-in prompt. Alice replies YES → onboarding starts → four exchanges later she's set up.
+Free-tier limits: 10 verified contacts. Plenty for friends validation.
 
 ## Commands users can send
 

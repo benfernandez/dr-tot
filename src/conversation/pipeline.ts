@@ -14,6 +14,7 @@ import {
   updateUser,
   type User,
 } from '../db/users';
+import { SendBlueProvider } from '../messaging/sendblue';
 import {
   addMessage,
   getRecentMessages,
@@ -57,20 +58,16 @@ export async function handleInbound(
     return;
   }
 
-  // START / YES is the double-opt-in confirmation for a pre-authorized number.
+  // First-touch provisioning. On Sendblue's free tier, users must text us
+  // first — so the first inbound IS the sign-up event. Create the user and
+  // send the double-opt-in prompt; we won't onboard them until they reply YES.
   if (!user) {
-    if (inbound.text && isStartKeyword(inbound.text)) {
-      // We only create a user on their first inbound after an admin pre-authorizes
-      // them — see scripts/add-user.ts. Without that path there's no user yet, so
-      // a cold START means "someone is texting a number we haven't whitelisted."
-      await router.send({
-        to: inbound.from,
-        text: `Welcome! This number isn't set up yet. Ping the friend who sent you, or reach out: ${config.publicAppUrl}`,
-      });
-      return;
-    }
-    // Unknown sender with no START — silently drop. Prevents random texts from
-    // provisioning accounts.
+    user = await createUser(inbound.from);
+    user = await updateUser(user.id, { preferred_channel: inbound.channel });
+    await router.send({
+      to: inbound.from,
+      text: `Hi — I'm Dr. Tot, an AI nutrition companion for people on GLP-1 meds (Ozempic, Wegovy, Mounjaro, Zepbound). Reply YES to confirm and I'll get you set up. Reply STOP to opt out. Msg&data rates may apply.`,
+    });
     return;
   }
 
@@ -161,6 +158,12 @@ async function handleChatTurn(
 
   // Background: extract structured logs (protein amounts, feelings) from text.
   extractLogs(user, userText).catch((err) => console.error('extractLogs', err));
+
+  // Fire typing indicator (iMessage-only, SMS users see nothing). Non-blocking.
+  const provider = router.inbound;
+  if (provider instanceof SendBlueProvider) {
+    void provider.sendTyping(user.phone_number);
+  }
 
   const reply = await replyTo(user, history, userText);
   await router.send({ to: user.phone_number, text: reply });

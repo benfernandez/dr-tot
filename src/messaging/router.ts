@@ -88,10 +88,14 @@ export class MessageRouter {
 }
 
 export function buildMessageRouter(): MessageRouter {
+  if (!config.sendblueSigningSecret) {
+    console.warn('[sendblue] SENDBLUE_SIGNING_SECRET not set — webhook signatures will not be verified');
+  }
   const sendblue = new SendBlueProvider(
     config.sendblueApiKey,
     config.sendblueApiSecret,
-    config.sendblueSigningSecret,
+    config.sendblueFromNumber,
+    config.sendblueSigningSecret || null,
   );
   return new MessageRouter(sendblue, null);
 }
