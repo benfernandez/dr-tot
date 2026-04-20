@@ -3,6 +3,8 @@ import cors from '@fastify/cors';
 import { config } from '../config';
 import type { MessageRouter } from '../messaging/router';
 import { handleInbound } from '../conversation/pipeline';
+import { markInboundSeen } from '../db/messages';
+import { insertPending, markProcessed, markAttempt } from '../db/pending';
 import { verifyAndParse, handleStripeEvent } from '../billing/webhook';
 import { stripeEnabled } from '../billing/stripe-client';
 import { createCheckoutSession } from '../billing/checkout';
@@ -54,6 +56,18 @@ export async function startWebhookServer(opts: StartOpts): Promise<FastifyInstan
 
   // ──────────────────────────────────────────────────────────────
   // Sendblue inbound webhook (iMessage / SMS → conversation pipeline)
+  //
+  // Ordering matters for crash safety:
+  //   1. signature verify
+  //   2. parse
+  //   3. dedup against Sendblue retries (inbound_messages_seen)
+  //   4. persist payload to pending_inbounds (BEFORE 200)
+  //   5. 200 to Sendblue
+  //   6. fire-and-forget handleInbound; mark processed on success
+  //
+  // If the container SIGTERMs between 5 and 6, the pending_inbounds row
+  // stays with processed_at=null and the next container's startup sweep
+  // (runStartupSweep below) picks it up.
   // ──────────────────────────────────────────────────────────────
   app.post('/webhooks/sendblue', async (req, reply) => {
     const { parsed, raw } = req.body as JsonBody;
@@ -68,10 +82,29 @@ export async function startWebhookServer(opts: StartOpts): Promise<FastifyInstan
     const inbound = provider.parseInbound(parsed);
     if (!inbound) return reply.code(200).send({ ok: true, ignored: true });
 
+    // Dedup Sendblue retries BEFORE persisting; if we've seen it we skip
+    // both the pending row and the downstream processing.
+    const firstSeen = await markInboundSeen(provider.name, inbound.providerMessageId);
+    if (!firstSeen) return reply.code(200).send({ ok: true, duplicate: true });
+
+    let pendingId: string;
+    try {
+      pendingId = await insertPending(provider.name, parsed);
+    } catch (err) {
+      // If we can't persist, 500 so Sendblue retries — better a retry than
+      // a silent drop during a Supabase blip.
+      req.log.error({ err }, 'insertPending failed');
+      return reply.code(500).send({ error: 'persist_failed' });
+    }
+
     reply.code(200).send({ ok: true });
-    handleInbound(opts.router, inbound).catch((err) => {
-      req.log.error({ err, from: inbound.from }, 'handleInbound failed');
-    });
+
+    handleInbound(opts.router, inbound)
+      .then(() => markProcessed(pendingId))
+      .catch((err) => {
+        req.log.error({ err, from: inbound.from }, 'handleInbound failed');
+        void markAttempt(pendingId, String(err?.message ?? err));
+      });
   });
 
   // ──────────────────────────────────────────────────────────────

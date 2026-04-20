@@ -17,7 +17,6 @@ import {
 import {
   addMessage,
   getRecentMessages,
-  markInboundSeen,
   type Message,
 } from '../db/messages';
 import { replyTo } from '../ai/nutritionist';
@@ -38,13 +37,16 @@ const HELP_TEXT = `I'm Dr. Tot — your AI nutrition companion for GLP-1 medicat
 
 const RATE_LIMIT_PER_HOUR = 30;
 
+/**
+ * Process a single inbound message. Dedup against Sendblue retries happens
+ * upstream in the webhook handler (via inbound_messages_seen) BEFORE this
+ * function is called, so crash-recovery replays from pending_inbounds go
+ * through fine — we don't re-check seen here.
+ */
 export async function handleInbound(
   router: MessageRouter,
   inbound: InboundMessage,
 ): Promise<void> {
-  const firstSeen = await markInboundSeen('sendblue', inbound.providerMessageId);
-  if (!firstSeen) return;
-
   let user = await getUserByPhone(inbound.from);
 
   // STOP is carrier-mandated: must honor regardless of user state, instantly.
