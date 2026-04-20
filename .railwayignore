@@ -1,0 +1,4 @@
+# Railway builds the backend (src/) only. The Next.js app under web/ deploys
+# separately on Vercel — exclude it so Nixpacks doesn't waste build time on it
+# and doesn't fight over conflicting cache mounts during install.
+web/
