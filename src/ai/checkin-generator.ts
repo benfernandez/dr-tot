@@ -16,7 +16,7 @@ function stripMarkdown(text: string): string {
     .trim();
 }
 
-export async function generateMorningCheckin(user: User, recentCheckins: string[] = []): Promise<string> {
+export async function generateMiddayCheckin(user: User, recentCheckins: string[] = []): Promise<string> {
   const avoidBlock = recentCheckins.length
     ? `\n\nRECENT CHECK-INS (do NOT repeat these phrasings or food ideas):\n${recentCheckins.map((c) => `- ${c}`).join('\n')}`
     : '';
@@ -28,7 +28,7 @@ export async function generateMorningCheckin(user: User, recentCheckins: string[
     messages: [
       {
         role: 'user',
-        content: `It's ~8am local time. Write ONE morning text (1-2 sentences, plain text, no markdown) with a specific high-protein breakfast idea that fits this user.
+        content: `It's around noon local time. Write ONE lunchtime text (1-2 sentences, plain text, no markdown) with a specific high-protein lunch idea that fits this user. GLP-1 appetite tends to be lowest in the morning, so lunch is often the first real meal of the day — make the suggestion feel doable, not daunting.
 
 ${userProfileBlock(user)}${avoidBlock}`,
       },
@@ -36,6 +36,6 @@ ${userProfileBlock(user)}${avoidBlock}`,
   });
 
   const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
-  const raw = textBlock?.text ?? "Morning! Greek yogurt with berries and a spoon of peanut butter is a quick ~20g protein win. How are you feeling today?";
+  const raw = textBlock?.text ?? "Hey — a rotisserie chicken + cottage cheese + apple combo = ~30g protein and zero cooking. How's the appetite today?";
   return stripMarkdown(raw);
 }

@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 
-export type CheckinType = 'morning';
+export type CheckinType = 'midday' | 'morning';
 
 export async function getRecentCheckinPreviews(userId: string, limit = 5): Promise<string[]> {
   const { data, error } = await supabase

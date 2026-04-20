@@ -47,6 +47,10 @@ export const config = {
   // Generate via `openssl rand -hex 32` before paid launch.
   sessionSecret: optional('SESSION_SECRET', 'dev-only-do-not-use-in-prod-please'),
 
+  // Proactive check-in timing (user-local). Default: noon. Change via env if
+  // friends-test feedback shifts again; per-user scheduling comes later.
+  checkinHour: parseInt(optional('CHECKIN_HOUR', '12'), 10),
+
   maxHistoryMessages: 12,
   conversationModel: 'claude-sonnet-4-6',
   checkinModel: 'claude-haiku-4-5',

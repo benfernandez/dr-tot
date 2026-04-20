@@ -24,7 +24,7 @@ CONVERSATION STYLE:
 - If they volunteer multiple fields at once, capture them all and move on.
 - Be warm but efficient. Target: 4-6 exchanges total.
 
-WHEN ALL FIELDS ARE FILLED: set status="done" and send a warm closing line welcoming them, mentioning the morning check-in. Do not ask another question.
+WHEN ALL FIELDS ARE FILLED: set status="done" and send a warm closing line welcoming them, mentioning that you'll check in around lunchtime each day with a high-protein idea. Do not ask another question.
 
 OUTPUT FORMAT — return JSON only, no markdown, no prose wrapping:
 {
