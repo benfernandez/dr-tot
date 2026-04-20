@@ -2,6 +2,13 @@ import { supabase } from './supabase';
 
 export type CheckinFrequency = 'full' | 'moderate' | 'light' | 'none';
 export type Channel = 'imessage' | 'sms';
+export type SubscriptionStatus =
+  | 'pending_activation'
+  | 'trialing'
+  | 'active'
+  | 'past_due'
+  | 'canceled'
+  | 'ghost';
 
 export interface User {
   id: string;
@@ -22,6 +29,22 @@ export interface User {
   preferred_channel: Channel | null;
   consent_granted_at: string | null;
   opted_out_at: string | null;
+
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  stripe_email: string | null;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+  subscription_status: SubscriptionStatus | null;
+
+  fbc: string | null;
+  fbp: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_content: string | null;
+  first_touch_at: string | null;
+
   created_at: string;
   updated_at: string;
 }

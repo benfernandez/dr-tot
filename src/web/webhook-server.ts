@@ -1,19 +1,42 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import cors from '@fastify/cors';
+import { config } from '../config';
 import type { MessageRouter } from '../messaging/router';
 import { handleInbound } from '../conversation/pipeline';
+import { verifyAndParse, handleStripeEvent } from '../billing/webhook';
+import { stripeEnabled } from '../billing/stripe-client';
+import { createCheckoutSession } from '../billing/checkout';
+import { issueCode, consumeCode, signSession, verifySession } from '../account/magic-code';
+import {
+  accountStatus,
+  cancelSubscription,
+  deleteAccount,
+  exportAccount,
+  wipeHistory,
+} from '../account/actions';
+import { fireMetaEvent } from '../tracking/meta';
+import { normalizePhone } from '../db/users';
 
 interface StartOpts {
   port: number;
   router: MessageRouter;
 }
 
+type JsonBody = { parsed: unknown; raw: string };
+
 export async function startWebhookServer(opts: StartOpts): Promise<FastifyInstance> {
-  const app = Fastify({
-    logger: { level: 'info' },
-    bodyLimit: 1 * 1024 * 1024,
+  const app = Fastify({ logger: { level: 'info' }, bodyLimit: 1 * 1024 * 1024 });
+
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // curl / server-to-server
+      if (config.allowedOrigins.includes(origin)) return cb(null, true);
+      cb(new Error('origin not allowed'), false);
+    },
+    credentials: true,
   });
 
-  // Keep the raw body around so we can signature-verify without re-serializing.
+  // Keep raw body around for signature verification on both Sendblue + Stripe.
   app.addContentTypeParser(
     'application/json',
     { parseAs: 'string' },
@@ -29,8 +52,11 @@ export async function startWebhookServer(opts: StartOpts): Promise<FastifyInstan
 
   app.get('/health', async () => ({ ok: true }));
 
+  // ──────────────────────────────────────────────────────────────
+  // Sendblue inbound webhook (iMessage / SMS → conversation pipeline)
+  // ──────────────────────────────────────────────────────────────
   app.post('/webhooks/sendblue', async (req, reply) => {
-    const { parsed, raw } = req.body as { parsed: unknown; raw: string };
+    const { parsed, raw } = req.body as JsonBody;
     const headers = normalizeHeaders(req.headers);
 
     const provider = opts.router.inbound;
@@ -40,22 +66,150 @@ export async function startWebhookServer(opts: StartOpts): Promise<FastifyInstan
     }
 
     const inbound = provider.parseInbound(parsed);
-    if (!inbound) {
-      // Status callbacks or unsupported payload types land here — acknowledge
-      // so SendBlue stops retrying.
-      return reply.code(200).send({ ok: true, ignored: true });
-    }
+    if (!inbound) return reply.code(200).send({ ok: true, ignored: true });
 
-    // Respond to the webhook first; process async so we never block on Claude.
     reply.code(200).send({ ok: true });
-
     handleInbound(opts.router, inbound).catch((err) => {
       req.log.error({ err, from: inbound.from }, 'handleInbound failed');
     });
   });
 
-  app.post('/webhooks/telnyx', async (_req, reply) => {
-    return reply.code(501).send({ error: 'telnyx_not_wired_yet' });
+  // ──────────────────────────────────────────────────────────────
+  // Stripe webhook
+  // ──────────────────────────────────────────────────────────────
+  app.post('/webhooks/stripe', async (req, reply) => {
+    if (!stripeEnabled()) return reply.code(503).send({ error: 'stripe_not_configured' });
+
+    const { raw } = req.body as JsonBody;
+    const signature = (req.headers['stripe-signature'] as string) ?? '';
+
+    try {
+      const event = verifyAndParse(raw, signature);
+      reply.code(200).send({ ok: true });
+      handleStripeEvent(event).catch((err) => {
+        req.log.error({ err, event_type: event.type }, 'stripe event failed');
+      });
+    } catch (err) {
+      req.log.warn({ err }, 'stripe signature invalid');
+      return reply.code(400).send({ error: 'signature' });
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  // Frontend → backend APIs (Next.js on Vercel calls these)
+  // ──────────────────────────────────────────────────────────────
+
+  // Create a Stripe Checkout session. Landing page collects email + attribution
+  // and POSTs here; backend creates the session and returns the redirect URL.
+  app.post('/api/checkout/create-session', async (req, reply) => {
+    if (!stripeEnabled()) return reply.code(503).send({ error: 'stripe_not_configured' });
+    const body = (req.body as JsonBody).parsed as {
+      email?: string;
+      phoneNumber?: string;
+      fbc?: string;
+      fbp?: string;
+      utm?: Record<string, string>;
+      firstTouchAt?: string;
+    };
+
+    if (!body.email) return reply.code(400).send({ error: 'email_required' });
+
+    const session = await createCheckoutSession({
+      email: body.email,
+      phoneNumber: body.phoneNumber,
+      fbc: body.fbc,
+      fbp: body.fbp,
+      utm: body.utm,
+      firstTouchAt: body.firstTouchAt,
+    });
+
+    // Fire Meta InitiateCheckout server-side (paired with client-side pixel).
+    const clientIp = req.ip;
+    const userAgent = (req.headers['user-agent'] as string) ?? undefined;
+    void fireMetaEvent({
+      event_name: 'InitiateCheckout',
+      event_id: `checkout_${session.id}`,
+      event_time: Math.floor(Date.now() / 1000),
+      user: {
+        email: body.email,
+        phone: body.phoneNumber,
+        fbc: body.fbc,
+        fbp: body.fbp,
+        client_ip: clientIp,
+        user_agent: userAgent,
+      },
+    });
+
+    return { url: session.url };
+  });
+
+  // Magic-code auth for the account portal. Friend-of-dr-tot texts the code
+  // through the same Sendblue line that powers the bot.
+  app.post('/api/account/send-code', async (req, reply) => {
+    const { phone } = (req.body as JsonBody).parsed as { phone?: string };
+    if (!phone) return reply.code(400).send({ error: 'phone_required' });
+
+    const { phone: normalized, code } = await issueCode(phone);
+    try {
+      await opts.router.send({
+        to: normalized,
+        text: `Dr. Tot account code: ${code}\nExpires in 10 minutes.`,
+      });
+    } catch (err) {
+      req.log.error({ err }, 'send-code SMS failed');
+      // Don't leak send errors to the client — return success regardless so
+      // the portal UX is consistent whether the phone was valid or not.
+    }
+    return { ok: true };
+  });
+
+  app.post('/api/account/verify-code', async (req, reply) => {
+    const { phone, code } = (req.body as JsonBody).parsed as { phone?: string; code?: string };
+    if (!phone || !code) return reply.code(400).send({ error: 'phone_and_code_required' });
+
+    const ok = await consumeCode(phone, code);
+    if (!ok) return reply.code(401).send({ error: 'invalid_or_expired' });
+
+    const normalized = normalizePhone(phone);
+    const token = signSession(normalized);
+    return { token };
+  });
+
+  app.get('/api/account/status', async (req, reply) => {
+    const session = requireSession(req);
+    if (!session) return reply.code(401).send({ error: 'unauthorized' });
+    const status = await accountStatus(session.phone);
+    if (!status) return reply.code(404).send({ error: 'not_found' });
+    return status;
+  });
+
+  app.post('/api/account/cancel', async (req, reply) => {
+    const session = requireSession(req);
+    if (!session) return reply.code(401).send({ error: 'unauthorized' });
+    await cancelSubscription(session.phone);
+    return { ok: true };
+  });
+
+  app.post('/api/account/wipe-history', async (req, reply) => {
+    const session = requireSession(req);
+    if (!session) return reply.code(401).send({ error: 'unauthorized' });
+    await wipeHistory(session.phone);
+    return { ok: true };
+  });
+
+  app.post('/api/account/delete', async (req, reply) => {
+    const session = requireSession(req);
+    if (!session) return reply.code(401).send({ error: 'unauthorized' });
+    await deleteAccount(session.phone);
+    return { ok: true };
+  });
+
+  app.get('/api/account/export', async (req, reply) => {
+    const session = requireSession(req);
+    if (!session) return reply.code(401).send({ error: 'unauthorized' });
+    const data = await exportAccount(session.phone);
+    reply.header('Content-Disposition', 'attachment; filename="dr-tot-export.json"');
+    return data;
   });
 
   await app.listen({ host: '0.0.0.0', port: opts.port });
@@ -69,4 +223,11 @@ function normalizeHeaders(headers: Record<string, unknown>): Record<string, stri
     else if (Array.isArray(v) && typeof v[0] === 'string') out[k] = v[0];
   }
   return out;
+}
+
+function requireSession(req: FastifyRequest): { phone: string } | null {
+  const auth = (req.headers['authorization'] as string) ?? '';
+  const match = auth.match(/^Bearer (.+)$/);
+  if (!match) return null;
+  return verifySession(match[1]);
 }

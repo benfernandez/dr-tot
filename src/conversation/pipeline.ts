@@ -32,6 +32,7 @@ import {
   fireTypingIndicator,
   type DebouncedTurn,
 } from './debounce';
+import { fireMetaEvent } from '../tracking/meta';
 
 const HELP_TEXT = `I'm Dr. Tot — your AI nutrition companion for GLP-1 medications. Text me anytime, send meal photos, or just chat. For account stuff, head to ${config.publicAppUrl}/account. Reply STOP to opt out. Msg&data rates may apply.`;
 
@@ -89,7 +90,33 @@ export async function handleInbound(
     return;
   }
 
-  // Consent not yet granted — this is a pre-authorized number waiting for YES.
+  // Stripe activation: user paid at checkout, row was created with
+  // subscription_status='pending_activation'. Their first text = activation.
+  // Consent is implied by the TCPA checkbox they clicked at checkout, so we
+  // stamp it here with no reply-YES round-trip.
+  if (user.subscription_status === 'pending_activation' && user.stripe_customer_id) {
+    user = await updateUser(user.id, {
+      subscription_status: 'trialing',
+      consent_granted_at: new Date().toISOString(),
+      preferred_channel: inbound.channel,
+    });
+    void fireMetaEvent({
+      event_name: 'CompleteRegistration',
+      event_id: `activation_${user.id}`,
+      event_time: Math.floor(Date.now() / 1000),
+      user: {
+        email: user.stripe_email ?? undefined,
+        phone: user.phone_number,
+        fbc: user.fbc ?? undefined,
+        fbp: user.fbp ?? undefined,
+      },
+      user_id: user.id,
+    });
+    await handleOnboardingTurn(router, user, null);
+    return;
+  }
+
+  // Consent not yet granted — non-Stripe path (organic free-tier inbound).
   if (!user.consent_granted_at) {
     if (inbound.text && isStartKeyword(inbound.text)) {
       user = await updateUser(user.id, {
