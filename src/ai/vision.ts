@@ -3,16 +3,29 @@ import { config } from '../config';
 
 const client = new Anthropic({ apiKey: config.anthropicKey });
 
-const SYSTEM = `You are Dr. Tot analyzing a meal photo a user sent you. Your job: identify the food, estimate protein grams, and note anything relevant to someone on a GLP-1 medication (portion size, tolerability, protein-forwardness).
+const SYSTEM = `You are Dr. Tot analyzing a photo a user sent you over iMessage. Most users send meals (primary use case). Some will send body photos or other content — you must classify correctly because your classification drives different user-facing behavior.
 
 Return JSON only, no markdown:
 {
-  "description": string,         // short, specific: "grilled chicken + quinoa bowl with greens"
-  "protein_grams": number,       // best estimate, integer, 0 if unclear
-  "tolerance_note": string | null // brief note if anything looks high-fat, spicy, or otherwise likely to trigger GLP-1 side effects. Null if fine.
-}`;
+  "content_type": "food" | "body" | "other",
+  "description": string,
+  "protein_grams": number,
+  "tolerance_note": string | null
+}
+
+CLASSIFICATION RULES (apply strictly):
+- "food" — plates, meals, snacks, ingredients, drinks with nutritional content, cooking in progress, restaurant dishes, groceries, nutrition labels
+- "body" — any photo where the primary subject is a human body or body part: full-body shots, torso, arms, legs, stomach, face in a mirror pose, scale with the user on it, measuring-tape shots, before/after comparisons. A person INCIDENTAL to a meal (hand holding a plate) is still "food".
+- "other" — everything else: screenshots, pets, landscapes, non-food objects, memes, selfies without body-tracking intent
+
+FIELD RULES:
+- If "food": description is short + specific ("grilled chicken + quinoa bowl with greens"), protein_grams is best-guess integer, tolerance_note mentions anything likely to trigger GLP-1 side effects (high-fat, fried, very spicy) or null.
+- If "body" or "other": description is short factual ("body/scale photo" or "screenshot of a text conversation"), protein_grams is 0, tolerance_note is null.`;
+
+export type ContentType = 'food' | 'body' | 'other';
 
 export interface VisionResult {
+  contentType: ContentType;
   description: string;
   proteinGrams: number;
   toleranceNote: string | null;
@@ -35,7 +48,7 @@ export async function describeMeal(imageUrl: string, userCaption: string): Promi
           },
           {
             type: 'text',
-            text: userCaption ? `User said: ${userCaption}` : 'Identify the meal and estimate protein.',
+            text: userCaption ? `User said: ${userCaption}` : 'Classify and analyze this photo.',
           },
         ],
       },
@@ -46,15 +59,26 @@ export async function describeMeal(imageUrl: string, userCaption: string): Promi
   const raw = textBlock?.text ?? '';
 
   try {
-    const parsed = JSON.parse(stripCodeFences(raw)) as VisionResult & { protein_grams: number; tolerance_note: string | null };
+    const parsed = JSON.parse(stripCodeFences(raw)) as {
+      content_type?: string;
+      description?: string;
+      protein_grams?: number;
+      tolerance_note?: string | null;
+    };
     return {
-      description: parsed.description ?? 'a meal',
+      contentType: normalizeContentType(parsed.content_type),
+      description: parsed.description ?? 'a photo',
       proteinGrams: Math.max(0, Math.floor(parsed.protein_grams ?? 0)),
       toleranceNote: parsed.tolerance_note ?? null,
     };
   } catch {
-    return { description: 'a meal', proteinGrams: 0, toleranceNote: null };
+    return { contentType: 'other', description: 'a photo', proteinGrams: 0, toleranceNote: null };
   }
+}
+
+function normalizeContentType(raw: string | undefined): ContentType {
+  if (raw === 'food' || raw === 'body' || raw === 'other') return raw;
+  return 'other';
 }
 
 type AllowedMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';

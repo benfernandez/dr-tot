@@ -194,6 +194,28 @@ async function handleChatTurn(
   // one Sonnet turn.
   if (turn.mediaUrls.length > 0) {
     const vision = await describeMeal(turn.mediaUrls[0], userText);
+
+    // Body photos: gently decline + skip all downstream processing. GLP-1
+    // users are at elevated ED risk; body tracking is an explicit product
+    // non-goal. We never log or analyze these.
+    if (vision.contentType === 'body') {
+      await router.send({
+        to: user.phone_number,
+        text: "I keep my lens on food, not bodies — that's a boundary I hold on purpose for folks on GLP-1s. Wanna tell me what you ate instead?",
+      });
+      return;
+    }
+
+    // Non-food, non-body (screenshot, pet, landscape, etc.): acknowledge
+    // without trying to extract nutrition signal.
+    if (vision.contentType === 'other') {
+      await router.send({
+        to: user.phone_number,
+        text: "I'm mostly useful for meal photos — send a plate and I'll dig in. What's on your plate today?",
+      });
+      return;
+    }
+
     userText = userText
       ? `${userText}\n\n[Photo description: ${vision.description} — protein estimate: ~${vision.proteinGrams}g]`
       : `[Photo: ${vision.description} — protein estimate: ~${vision.proteinGrams}g]`;
