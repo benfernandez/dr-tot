@@ -83,13 +83,41 @@ function normalizeContentType(raw: string | undefined): ContentType {
 
 type AllowedMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
 
+/**
+ * Fetch an image URL and return a base64 payload Claude vision accepts.
+ *
+ * iPhones send HEIC by default (Messages usually re-encodes, but Sendblue's
+ * inbound webhook sometimes hands us the raw HEIC). Claude's image API doesn't
+ * support HEIC — we detect via magic bytes and decode to JPEG on the fly with
+ * heic-convert (pure JS, no native deps).
+ */
 async function fetchImageAsBase64(url: string): Promise<{ mediaType: AllowedMediaType; base64: string }> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
   const contentType = res.headers.get('content-type') ?? 'image/jpeg';
-  const mediaType = normalizeMediaType(contentType);
-  const buffer = Buffer.from(await res.arrayBuffer());
+  let buffer = Buffer.from(await res.arrayBuffer());
+  let mediaType = normalizeMediaType(contentType);
+
+  if (isHeicBuffer(buffer)) {
+    const { default: convert } = await import('heic-convert');
+    const out = await convert({ buffer, format: 'JPEG', quality: 0.85 });
+    buffer = Buffer.from(out);
+    mediaType = 'image/jpeg';
+  }
+
   return { mediaType, base64: buffer.toString('base64') };
+}
+
+/**
+ * ISO BMFF "ftyp" box with a HEIC/HEIF brand. Covers the brands Apple ships:
+ * heic (HEVC still), heix, mif1 (HEIF), heim/heis (multi-image/sequence),
+ * hevc/hevm/hevs (HEVC sequences).
+ */
+function isHeicBuffer(buf: Buffer): boolean {
+  if (buf.length < 12) return false;
+  if (buf.subarray(4, 8).toString('ascii') !== 'ftyp') return false;
+  const brand = buf.subarray(8, 12).toString('ascii');
+  return ['heic', 'heix', 'mif1', 'hevc', 'heim', 'heis', 'hevm', 'hevs'].includes(brand);
 }
 
 function normalizeMediaType(ct: string): AllowedMediaType {

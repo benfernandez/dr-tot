@@ -193,7 +193,17 @@ async function handleChatTurn(
   // improvement: multi-image vision call so a whole meal spread collapses to
   // one Sonnet turn.
   if (turn.mediaUrls.length > 0) {
-    const vision = await describeMeal(turn.mediaUrls[0], userText);
+    let vision;
+    try {
+      vision = await describeMeal(turn.mediaUrls[0], userText);
+    } catch (err) {
+      console.error('vision failed', err);
+      await router.send({
+        to: user.phone_number,
+        text: "Hmm, I couldn't read that photo. Want to try sending it again, or just tell me what you ate?",
+      });
+      return;
+    }
 
     // Body photos: gently decline + skip all downstream processing. GLP-1
     // users are at elevated ED risk; body tracking is an explicit product
