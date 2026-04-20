@@ -14,7 +14,6 @@ import {
   updateUser,
   type User,
 } from '../db/users';
-import { SendBlueProvider } from '../messaging/sendblue';
 import {
   addMessage,
   getRecentMessages,
@@ -27,6 +26,12 @@ import { handleOnboardingTurn } from './onboarding';
 import { extractLogs } from './intent-extractor';
 import { addProtein } from '../db/protein';
 import { DateTime } from 'luxon';
+import {
+  scheduleTurn,
+  cancelPendingTurn,
+  fireTypingIndicator,
+  type DebouncedTurn,
+} from './debounce';
 
 const HELP_TEXT = `I'm Dr. Tot — your AI nutrition companion for GLP-1 medications. Text me anytime, send meal photos, or just chat. For account stuff, head to ${config.publicAppUrl}/account. Reply STOP to opt out. Msg&data rates may apply.`;
 
@@ -42,7 +47,9 @@ export async function handleInbound(
   let user = await getUserByPhone(inbound.from);
 
   // STOP is carrier-mandated: must honor regardless of user state, instantly.
+  // Cancel any debounced chat turn — we don't want to reply AFTER opting them out.
   if (inbound.text && isStopKeyword(inbound.text)) {
+    if (user) cancelPendingTurn(user.id);
     if (user && !user.opted_out_at) {
       await updateUser(user.id, { opted_out_at: new Date().toISOString() });
     }
@@ -124,24 +131,42 @@ export async function handleInbound(
   }
 
   if (!user.onboarding_complete) {
+    // Onboarding is a synchronous state machine — don't debounce it.
     await handleOnboardingTurn(router, user, inbound.text || null);
     return;
   }
 
-  await handleChatTurn(router, user, inbound, recent);
+  // Chat turn — fire typing immediately to mask the debounce window, then
+  // schedule the combined process. Bursts of messages from one user collapse
+  // into a single Claude call.
+  fireTypingIndicator(router.inbound, user.phone_number);
+
+  scheduleTurn(
+    user.id,
+    { text: inbound.text, mediaUrls: inbound.mediaUrls },
+    async (turn) => {
+      const freshUser = await getUserByPhone(inbound.from);
+      if (!freshUser || freshUser.opted_out_at) return;
+      const freshHistory = await getRecentMessages(freshUser.id, config.maxHistoryMessages * 2);
+      await handleChatTurn(router, freshUser, turn, freshHistory);
+    },
+  );
 }
 
 async function handleChatTurn(
   router: MessageRouter,
   user: User,
-  inbound: InboundMessage,
+  turn: DebouncedTurn,
   history: Message[],
 ): Promise<void> {
-  let userText = inbound.text.trim();
+  let userText = turn.text.trim();
 
   // Photo → vision pass first, fold result into the chat turn as context.
-  if (inbound.mediaUrls.length > 0) {
-    const vision = await describeMeal(inbound.mediaUrls[0], userText);
+  // If the user bursted multiple photos, analyze the first (v1); future
+  // improvement: multi-image vision call so a whole meal spread collapses to
+  // one Sonnet turn.
+  if (turn.mediaUrls.length > 0) {
+    const vision = await describeMeal(turn.mediaUrls[0], userText);
     userText = userText
       ? `${userText}\n\n[Photo description: ${vision.description} — protein estimate: ~${vision.proteinGrams}g]`
       : `[Photo: ${vision.description} — protein estimate: ~${vision.proteinGrams}g]`;
@@ -158,12 +183,6 @@ async function handleChatTurn(
 
   // Background: extract structured logs (protein amounts, feelings) from text.
   extractLogs(user, userText).catch((err) => console.error('extractLogs', err));
-
-  // Fire typing indicator (iMessage-only, SMS users see nothing). Non-blocking.
-  const provider = router.inbound;
-  if (provider instanceof SendBlueProvider) {
-    void provider.sendTyping(user.phone_number);
-  }
 
   const reply = await replyTo(user, history, userText);
   await router.send({ to: user.phone_number, text: reply });
