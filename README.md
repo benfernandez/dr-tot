@@ -4,6 +4,13 @@ AI nutrition companion for GLP-1 medication users (Ozempic, Wegovy, Mounjaro, Ze
 
 **Status:** v0.2 — fresh rewrite off the Telegram prototype. iMessage-primary, conversation-first. No buttons, no slash commands — just text and photos.
 
+## Monorepo layout
+
+- **`src/`** — Dr. Tot backend (Node/TS). Hosted on Railway at `api.doctortot.com`. Handles Sendblue webhooks, Stripe webhooks, account APIs, conversation pipeline, Claude calls.
+- **`web/`** — Next.js (App Router) marketing + portal. Hosted on Vercel at `doctortot.com` / `app.doctortot.com`. Landing page, Stripe Checkout redirect, thank-you with `sms:` deep link, account portal.
+- **`supabase/migrations/`** — schema, run in Supabase SQL editor in numeric order.
+- **`docs/`** — A2P application, privacy/terms drafts, operational docs.
+
 ## How it works
 
 - **Inbound**: iMessage or SMS hits SendBlue → webhook to our server → identify user by phone → conversational reply from Claude Sonnet.
