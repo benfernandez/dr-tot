@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 import { config } from '../config';
 import { supabase } from '../db/supabase';
+import { logger } from '../logger';
+import { logError } from '../db/error-log';
+
+const log = logger.child({ module: 'capi' });
 
 /**
  * Meta Conversion API (server-side event tracking).
@@ -54,7 +58,7 @@ interface FireArgs {
 export async function fireMetaEvent(args: FireArgs): Promise<void> {
   if (!config.metaPixelId || !config.metaCapiAccessToken) {
     // No-op in local dev — log so we know it would have fired.
-    console.log(`[capi] would fire ${args.event_name} (pixel/token not configured)`);
+    log.info({ event_name: args.event_name }, 'would fire (pixel/token not configured)');
     return;
   }
 
@@ -84,10 +88,16 @@ export async function fireMetaEvent(args: FireArgs): Promise<void> {
     );
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      console.error(`[capi] ${args.event_name} failed: ${res.status} ${text.slice(0, 300)}`);
+      log.error({ event_name: args.event_name, status: res.status, body: text.slice(0, 300) }, 'capi call failed');
+      void logError('capi_call_failed', new Error(`${res.status} ${text.slice(0, 300)}`), {
+        event_name: args.event_name,
+        event_id: args.event_id,
+        status: res.status,
+      });
     }
   } catch (err) {
-    console.error('[capi] fetch failed', err);
+    log.error({ err, event_name: args.event_name }, 'capi fetch failed');
+    void logError('capi_fetch_failed', err, { event_name: args.event_name, event_id: args.event_id });
   }
 
   // Audit log. Even in no-op mode we want the record so we can see what
@@ -102,7 +112,8 @@ export async function fireMetaEvent(args: FireArgs): Promise<void> {
       payload,
     });
   } catch (err) {
-    console.error('[capi] audit insert failed', err);
+    log.error({ err }, 'capi audit insert failed');
+    void logError('capi_audit_insert_failed', err, { event_name: args.event_name });
   }
 }
 

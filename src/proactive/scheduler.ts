@@ -1,6 +1,8 @@
 import cron from 'node-cron';
 import { DateTime } from 'luxon';
 import { config } from '../config';
+import { logger } from '../logger';
+import { logError } from '../db/error-log';
 import { getActiveCheckinUsers, type User } from '../db/users';
 import { claimCheckin, getRecentCheckinPreviews, recordCheckinPreview } from '../db/checkins';
 import { addMessage, minutesSinceLastUserMessage } from '../db/messages';
@@ -10,6 +12,8 @@ import { getLatestWeightForDate } from '../db/weight';
 import { getActivityForDate } from '../db/activity';
 import { generateMiddayCheckin, type YesterdaySignals } from '../ai/checkin-generator';
 import type { MessageRouter } from '../messaging/router';
+
+const log = logger.child({ module: 'scheduler' });
 
 const WINDOW_MINUTES = 30;
 const CHECKIN_TYPE = 'midday' as const;
@@ -63,7 +67,8 @@ async function maybeSendCheckin(router: MessageRouter, user: User): Promise<void
     await router.send({ to: user.phone_number, text: message });
     await addMessage(user.id, 'proactive', message, CHECKIN_TYPE);
   } catch (err) {
-    console.error(`send failed for ${user.phone_number}`, err);
+    log.error({ err, userId: user.id }, 'checkin send failed');
+    void logError('checkin_send_failed', err, { userId: user.id });
   }
 }
 
@@ -72,11 +77,17 @@ export function startScheduler(router: MessageRouter): void {
     try {
       const users = await getActiveCheckinUsers();
       await Promise.all(
-        users.map((u) => maybeSendCheckin(router, u).catch((e) => console.error('checkin err', e))),
+        users.map((u) =>
+          maybeSendCheckin(router, u).catch((err) => {
+            log.error({ err, userId: u.id }, 'checkin errored');
+            void logError('checkin_errored', err, { userId: u.id });
+          }),
+        ),
       );
     } catch (err) {
-      console.error('scheduler tick failed', err);
+      log.error({ err }, 'scheduler tick failed');
+      void logError('scheduler_tick_failed', err);
     }
   });
-  console.log(`Scheduler started (every 5 min, check-in at ${config.checkinHour}:00 local)`);
+  log.info({ checkinHour: config.checkinHour }, 'scheduler started (every 5 min)');
 }

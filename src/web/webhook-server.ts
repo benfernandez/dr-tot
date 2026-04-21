@@ -1,6 +1,8 @@
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import { config } from '../config';
+import { loggerOptions } from '../logger';
+import { logError } from '../db/error-log';
 import type { MessageRouter } from '../messaging/router';
 import { handleInbound } from '../conversation/pipeline';
 import { markInboundSeen } from '../db/messages';
@@ -33,7 +35,7 @@ export async function startWebhookServer(opts: StartOpts): Promise<FastifyInstan
   // drown out real signal. We reimplement logging below to only log routes
   // we actually care about.
   const app = Fastify({
-    logger: { level: 'info' },
+    logger: loggerOptions,
     disableRequestLogging: true,
     bodyLimit: 1 * 1024 * 1024,
   });
@@ -116,6 +118,10 @@ export async function startWebhookServer(opts: StartOpts): Promise<FastifyInstan
     const provider = opts.router.inbound;
     if (!provider.verifyWebhookSignature(raw, headers)) {
       req.log.warn({ provider: provider.name }, 'webhook signature failed');
+      void logError('sendblue_sig_fail', new Error('signature verification failed'), {
+        provider: provider.name,
+        reqId: req.id,
+      });
       return reply.code(401).send({ error: 'signature' });
     }
 
@@ -150,6 +156,7 @@ export async function startWebhookServer(opts: StartOpts): Promise<FastifyInstan
       // If we can't persist, 500 so Sendblue retries — better a retry than
       // a silent drop during a Supabase blip.
       req.log.error({ err }, 'insertPending failed');
+      void logError('pending_insert_failed', err, { reqId: req.id });
       return reply.code(500).send({ error: 'persist_failed' });
     }
 
@@ -159,6 +166,11 @@ export async function startWebhookServer(opts: StartOpts): Promise<FastifyInstan
       .then(() => markProcessed(pendingId))
       .catch((err) => {
         req.log.error({ err, from: inbound.from }, 'handleInbound failed');
+        void logError('handle_inbound_failed', err, {
+          from: inbound.from,
+          pendingId,
+          reqId: req.id,
+        });
         void markAttempt(pendingId, String(err?.message ?? err));
       });
   });
@@ -177,9 +189,15 @@ export async function startWebhookServer(opts: StartOpts): Promise<FastifyInstan
       reply.code(200).send({ ok: true });
       handleStripeEvent(event).catch((err) => {
         req.log.error({ err, event_type: event.type }, 'stripe event failed');
+        void logError('stripe_event_failed', err, {
+          event_type: event.type,
+          event_id: event.id,
+          reqId: req.id,
+        });
       });
     } catch (err) {
       req.log.warn({ err }, 'stripe signature invalid');
+      void logError('stripe_sig_fail', err, { reqId: req.id });
       return reply.code(400).send({ error: 'signature' });
     }
   });
@@ -246,6 +264,7 @@ export async function startWebhookServer(opts: StartOpts): Promise<FastifyInstan
       });
     } catch (err) {
       req.log.error({ err }, 'send-code SMS failed');
+      void logError('send_code_failed', err, { phone: normalized, reqId: req.id });
       // Don't leak send errors to the client — return success regardless so
       // the portal UX is consistent whether the phone was valid or not.
     }

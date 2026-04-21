@@ -2,6 +2,10 @@ import { supabase } from '../db/supabase';
 import { stripe, stripeEnabled } from '../billing/stripe-client';
 import { getUserByPhone, updateUser, type User } from '../db/users';
 import { clearMessages } from '../db/messages';
+import { logger } from '../logger';
+import { logError } from '../db/error-log';
+
+const log = logger.child({ module: 'account' });
 
 export async function accountStatus(phone: string): Promise<{
   email: string | null;
@@ -45,7 +49,11 @@ export async function deleteAccount(phone: string): Promise<void> {
     try {
       await stripe().subscriptions.cancel(user.stripe_subscription_id);
     } catch (err) {
-      console.warn('[account.delete] stripe cancel failed', err);
+      log.warn({ err, userId: user.id }, 'stripe cancel failed during account delete');
+      void logError('account_delete_stripe_cancel_failed', err, {
+        userId: user.id,
+        subscription_id: user.stripe_subscription_id,
+      });
       // Don't block deletion on Stripe — the subscription may already be gone.
     }
   }

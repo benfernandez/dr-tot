@@ -1,10 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config';
+import { logger } from '../logger';
 import type { User } from '../db/users';
 import type { Message } from '../db/messages';
 import { NUTRITIONIST_SYSTEM, userProfileBlock } from './prompts';
 
 const client = new Anthropic({ apiKey: config.anthropicKey });
+const log = logger.child({ module: 'nutritionist' });
 
 export async function replyTo(user: User, history: Message[], userText: string): Promise<string> {
   const trimmed = history.slice(-config.maxHistoryMessages);
@@ -26,8 +28,15 @@ export async function replyTo(user: User, history: Message[], userText: string):
 
   const usage = response.usage;
   if (usage) {
-    console.log(
-      `[sonnet] in=${usage.input_tokens} cached_read=${usage.cache_read_input_tokens ?? 0} cached_write=${usage.cache_creation_input_tokens ?? 0} out=${usage.output_tokens}`,
+    log.info(
+      {
+        model: 'sonnet',
+        in: usage.input_tokens,
+        cached_read: usage.cache_read_input_tokens ?? 0,
+        cached_write: usage.cache_creation_input_tokens ?? 0,
+        out: usage.output_tokens,
+      },
+      'anthropic usage',
     );
   }
 

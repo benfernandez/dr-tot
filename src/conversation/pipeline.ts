@@ -1,6 +1,10 @@
 import { config } from '../config';
+import { logger } from '../logger';
+import { logError } from '../db/error-log';
 import type { MessageRouter } from '../messaging/router';
 import type { InboundMessage } from '../messaging/provider';
+
+const log = logger.child({ module: 'pipeline' });
 import {
   detectDestructiveIntent,
   buildRedirectMessage,
@@ -199,7 +203,8 @@ async function handleChatTurn(
     try {
       vision = await describeMeal(turn.mediaUrls[0], userText);
     } catch (err) {
-      console.error('vision failed', err);
+      log.error({ err, userId: user.id }, 'vision failed');
+      void logError('vision_failed', err, { userId: user.id });
       await router.send({
         to: user.phone_number,
         text: "Hmm, I couldn't read that photo. Want to try sending it again, or just tell me what you ate?",
@@ -243,7 +248,10 @@ async function handleChatTurn(
   await addMessage(user.id, 'user', userText);
 
   // Background: extract structured logs (protein amounts, feelings) from text.
-  extractLogs(user, userText).catch((err) => console.error('extractLogs', err));
+  extractLogs(user, userText).catch((err) => {
+    log.error({ err, userId: user.id }, 'extractLogs failed');
+    void logError('extract_logs_failed', err, { userId: user.id });
+  });
 
   const reply = await replyTo(user, history, userText);
   await router.send({ to: user.phone_number, text: reply });

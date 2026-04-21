@@ -1,4 +1,6 @@
 import { config } from './config';
+import { logger } from './logger';
+import { logError } from './db/error-log';
 import { startWebhookServer } from './web/webhook-server';
 import { startScheduler } from './proactive/scheduler';
 import { buildMessageRouter, type MessageRouter } from './messaging/router';
@@ -19,7 +21,7 @@ async function runStartupSweep(router: MessageRouter): Promise<void> {
   const rows = await findUnprocessed(100);
   if (rows.length === 0) return;
 
-  console.log(`[sweep] found ${rows.length} unprocessed inbound(s) from a prior container; replaying`);
+  logger.info({ count: rows.length }, '[sweep] replaying unprocessed inbounds from prior container');
 
   for (const row of rows) {
     const inbound = router.inbound.parseInbound(row.payload);
@@ -31,7 +33,8 @@ async function runStartupSweep(router: MessageRouter): Promise<void> {
       await handleInbound(router, inbound);
       await markProcessed(row.id);
     } catch (err) {
-      console.error(`[sweep] replay failed for ${row.id}`, err);
+      logger.error({ err, pendingId: row.id }, '[sweep] replay failed');
+      void logError('sweep_replay_failed', err, { pendingId: row.id });
       await markAttempt(row.id, String((err as Error)?.message ?? err));
     }
   }
@@ -46,12 +49,15 @@ async function main() {
   const app = await startWebhookServer({ port: config.port, router });
   startScheduler(router);
 
-  await runStartupSweep(router).catch((err) => console.error('[sweep] failed', err));
+  await runStartupSweep(router).catch((err) => {
+    logger.error({ err }, '[sweep] failed');
+    void logError('sweep_failed', err);
+  });
 
-  console.log(`Dr. Tot listening on :${config.port}`);
+  logger.info({ port: config.port }, 'Dr. Tot listening');
 
   const shutdown = async (sig: string) => {
-    console.log(`${sig} received, stopping…`);
+    logger.info({ sig }, 'shutdown signal received');
     await app.close();
     process.exit(0);
   };
@@ -60,6 +66,11 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('fatal', err);
-  process.exit(1);
+  logger.fatal({ err }, 'fatal startup error');
+  // Best-effort persistence before exit. 500ms budget so we don't hang a
+  // restart if Supabase is also down.
+  void Promise.race([
+    logError('fatal_startup', err),
+    new Promise((r) => setTimeout(r, 500)),
+  ]).finally(() => process.exit(1));
 });

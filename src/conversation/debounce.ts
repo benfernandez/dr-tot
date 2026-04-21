@@ -1,5 +1,9 @@
 import type { MessageProvider } from '../messaging/provider';
 import { SendBlueProvider } from '../messaging/sendblue';
+import { logger } from '../logger';
+import { logError } from '../db/error-log';
+
+const log = logger.child({ module: 'debounce' });
 
 /**
  * In-memory debouncer. When a user texts multiple messages in quick succession
@@ -63,7 +67,8 @@ export function scheduleTurn(
       mediaUrls: entry.mediaUrls,
     };
     process(combined).catch((err) => {
-      console.error('[debounce] turn processing failed', err);
+      log.error({ err, userId }, 'turn processing failed');
+      void logError('debounce_turn_failed', err, { userId });
     });
   }, WINDOW_MS);
 

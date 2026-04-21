@@ -10,6 +10,9 @@ import {
 } from '../db/users';
 import { supabase } from '../db/supabase';
 import { fireMetaEvent } from '../tracking/meta';
+import { logger } from '../logger';
+
+const log = logger.child({ module: 'stripe-webhook' });
 
 /**
  * Stripe's CJS TypeScript entry doesn't expose the full namespace of event
@@ -102,7 +105,7 @@ async function onCheckoutCompleted(session: CheckoutSessionLike): Promise<void> 
   const phone = session.customer_details?.phone ?? null;
   const email = session.customer_details?.email ?? session.customer_email;
   if (!email) {
-    console.warn('[stripe] checkout.session.completed without email', session.id);
+    log.warn({ session_id: session.id }, 'checkout.session.completed without email');
     return;
   }
 

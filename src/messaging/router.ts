@@ -1,6 +1,10 @@
 import { config } from '../config';
+import { logger } from '../logger';
+import { logError } from '../db/error-log';
 import type { MessageProvider, OutboundMessage, SendResult } from './provider';
 import { SendBlueProvider } from './sendblue';
+
+const log = logger.child({ module: 'router' });
 
 type ProviderName = MessageProvider['name'];
 
@@ -82,14 +86,17 @@ export class MessageRouter {
     c.failures += 1;
     if (c.failures >= FAILURE_THRESHOLD && c.openedAt === null) {
       c.openedAt = Date.now();
-      console.warn(`[circuit] ${name} opened after ${FAILURE_THRESHOLD} failures`);
+      log.warn({ provider: name, threshold: FAILURE_THRESHOLD }, 'circuit opened');
+      void logError('circuit_opened', new Error(`${name} opened after ${FAILURE_THRESHOLD} failures`), {
+        provider: name,
+      });
     }
   }
 }
 
 export function buildMessageRouter(): MessageRouter {
   if (!config.sendblueSigningSecret) {
-    console.warn('[sendblue] SENDBLUE_SIGNING_SECRET not set — webhook signatures will not be verified');
+    log.warn('SENDBLUE_SIGNING_SECRET not set — webhook signatures will not be verified');
   }
   const sendblue = new SendBlueProvider(
     config.sendblueApiKey,
