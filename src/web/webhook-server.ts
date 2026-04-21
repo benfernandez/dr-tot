@@ -108,6 +108,11 @@ export async function startWebhookServer(opts: StartOpts): Promise<FastifyInstan
     const { parsed, raw } = req.body as JsonBody;
     const headers = normalizeHeaders(req.headers);
 
+    // Debug: log every inbound payload (truncated) so we can tell real
+    // inbound messages apart from status callbacks and malformed bodies.
+    // Remove once Sendblue inbound is stable.
+    req.log.info({ raw: raw.slice(0, 800) }, 'sendblue webhook received');
+
     const provider = opts.router.inbound;
     if (!provider.verifyWebhookSignature(raw, headers)) {
       req.log.warn({ provider: provider.name }, 'webhook signature failed');
@@ -115,12 +120,28 @@ export async function startWebhookServer(opts: StartOpts): Promise<FastifyInstan
     }
 
     const inbound = provider.parseInbound(parsed);
-    if (!inbound) return reply.code(200).send({ ok: true, ignored: true });
+    if (!inbound) {
+      const p = (parsed && typeof parsed === 'object' ? parsed : {}) as Record<string, unknown>;
+      req.log.info(
+        {
+          keys: Object.keys(p),
+          is_outbound: p.is_outbound,
+          has_from: Boolean(p.from_number),
+          has_content: Boolean(p.content),
+          has_media: Boolean(p.media_url || (Array.isArray(p.media_urls) && p.media_urls.length > 0)),
+        },
+        'sendblue webhook ignored (parseInbound null)',
+      );
+      return reply.code(200).send({ ok: true, ignored: true });
+    }
 
     // Dedup Sendblue retries BEFORE persisting; if we've seen it we skip
     // both the pending row and the downstream processing.
     const firstSeen = await markInboundSeen(provider.name, inbound.providerMessageId);
-    if (!firstSeen) return reply.code(200).send({ ok: true, duplicate: true });
+    if (!firstSeen) {
+      req.log.info({ from: inbound.from }, 'sendblue webhook duplicate');
+      return reply.code(200).send({ ok: true, duplicate: true });
+    }
 
     let pendingId: string;
     try {
