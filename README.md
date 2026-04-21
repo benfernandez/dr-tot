@@ -70,6 +70,8 @@ sendblue lines           # → SENDBLUE_FROM_NUMBER
 sendblue webhooks set-receive https://api.doctortot.com/webhooks/sendblue
 ```
 
+Then Sendblue dashboard → **Webhook Configuration → Global Secret** → paste a random string (`openssl rand -hex 32`) and set the same value as `SENDBLUE_SIGNING_SECRET` on Railway. Without it, `verifyWebhookSignature` in `src/messaging/sendblue.ts` short-circuits to `true` and the endpoint is publicly writable — anyone who guesses the URL can forge inbound messages, burn Claude tokens, and trigger replies to spoofed numbers.
+
 Free tier: shared number, 10 verified contacts, reply-only (users text first). Sufficient for friends validation. Upgrade to **AI Agent ($100/mo)** for dedicated line + 200 follow-ups/day once you're past ~20 users.
 
 ### 3. Stripe: product + webhook
@@ -112,7 +114,19 @@ SQL Editor → paste each in order:
 3. Add env vars from `web/.env.example`
 4. Set primary domain `doctortot.com` (apex) and alias `app.doctortot.com`
 
-### 8. Local dev
+### 8. Cloudflare: turn off Bot Fight Mode
+
+Cloudflare's free-plan **Bot Fight Mode** (default-on) challenges POSTs from datacenter ASNs with empty User-Agents — i.e. exactly what Sendblue (AWS) and Stripe webhook POSTs look like. The request never reaches Railway; you see no `sendblue webhook received` log line and nothing obvious to debug.
+
+Symptoms in Cloudflare → **Security → Events**:
+- `action: managed_challenge`, `source: botFight`, `ruleId: bot_fight_mode`
+- `clientASNDescription: AMAZON-02`, empty `userAgent`, path `/webhooks/sendblue`
+
+On the free plan, BFM **cannot be bypassed with a WAF Skip rule** — it runs earlier in the pipeline than custom rules. Fix: Dashboard → **Security → Bots** → toggle *Bot Fight Mode* **off** for the zone. You keep DDoS protection, managed WAF, rate limiting, and the `sb-signing-secret` / `stripe-signature` signature checks on the webhook endpoints, so BFM is redundant once those are configured.
+
+On Pro plans, use *Super Bot Fight Mode* with a WAF Skip rule scoped to `starts_with(http.request.uri.path, "/webhooks/")` instead of disabling zone-wide.
+
+### 9. Local dev
 
 ```bash
 # Backend
