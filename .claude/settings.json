@@ -1,8 +1,6 @@
 {
   "env": {
-    "RAILWAY_API_TOKEN": "46c22208-234f-4df5-b477-55ebfb0fa3b1",
-    "SUPABASE_ACCESS_TOKEN": "sbp_2f5caf7716bccfe4cd52ad8921ce163f9f4dff48",
-    "SUPABASE_PROJECT_REF": "kyhgbzlretzugtywbchu"
+    "RAILWAY_API_TOKEN": "46c22208-234f-4df5-b477-55ebfb0fa3b1"
   },
   "hooks": {
     "SessionStart": [
@@ -26,14 +24,8 @@
       "Bash(railway list:*)",
       "Bash(railway environment:*)",
       "Bash(railway service:*)",
-      "Bash(supabase --version)",
-      "Bash(supabase projects:*)",
-      "Bash(supabase inspect:*)",
-      "Bash(supabase functions list:*)",
-      "Bash(supabase functions logs:*)",
-      "Bash(supabase db dump:*)",
-      "Bash(supabase db diff:*)",
-      "Bash(supabase migration list:*)",
+      "Bash(railway run:*)",
+      "Bash(npm run errors:*)",
       "Bash(npm run typecheck:*)",
       "Bash(npm run build:*)"
     ]
