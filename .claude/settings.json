@@ -1,7 +1,7 @@
 {
   "env": {
     "RAILWAY_API_TOKEN": "46c22208-234f-4df5-b477-55ebfb0fa3b1",
-    "SUPABASE_ACCESS_TOKEN": "sbp_84987d39fd6e8062c956a9db30ee113c2cf49651",
+    "SUPABASE_ACCESS_TOKEN": "sbp_10ed3719604ee5181a9c40adddd8e55b2758ceb2",
     "SUPABASE_PROJECT_REF": "kyhgbzlretzugtywbchu"
   },
   "hooks": {
