@@ -5,11 +5,24 @@ import { getActiveCheckinUsers, type User } from '../db/users';
 import { claimCheckin, getRecentCheckinPreviews, recordCheckinPreview } from '../db/checkins';
 import { addMessage, minutesSinceLastUserMessage } from '../db/messages';
 import { getProteinTotal } from '../db/protein';
-import { generateMiddayCheckin } from '../ai/checkin-generator';
+import { getFeelingsForDate } from '../db/feelings';
+import { getLatestWeightForDate } from '../db/weight';
+import { getActivityForDate } from '../db/activity';
+import { generateMiddayCheckin, type YesterdaySignals } from '../ai/checkin-generator';
 import type { MessageRouter } from '../messaging/router';
 
 const WINDOW_MINUTES = 30;
 const CHECKIN_TYPE = 'midday' as const;
+
+async function loadYesterdaySignals(userId: string, localDate: string): Promise<YesterdaySignals> {
+  const [proteinGrams, weightPounds, feelings, activity] = await Promise.all([
+    getProteinTotal(userId, localDate),
+    getLatestWeightForDate(userId, localDate),
+    getFeelingsForDate(userId, localDate),
+    getActivityForDate(userId, localDate),
+  ]);
+  return { proteinGrams, weightPounds, feelings, activity };
+}
 
 function isFrequencyAllowed(freq: User['checkin_frequency'], weekday: number): boolean {
   if (freq === 'none') return false;
@@ -40,8 +53,10 @@ async function maybeSendCheckin(router: MessageRouter, user: User): Promise<void
 
   const recent = await getRecentCheckinPreviews(user.id, 5);
   const yesterdayDate = now.minus({ days: 1 }).toISODate();
-  const yesterdayProtein = yesterdayDate ? await getProteinTotal(user.id, yesterdayDate) : 0;
-  const message = await generateMiddayCheckin(user, recent, yesterdayProtein);
+  const yesterday = yesterdayDate
+    ? await loadYesterdaySignals(user.id, yesterdayDate)
+    : { proteinGrams: 0, weightPounds: null, feelings: [], activity: [] };
+  const message = await generateMiddayCheckin(user, recent, yesterday);
   await recordCheckinPreview(user.id, CHECKIN_TYPE, localDate, message);
 
   try {
