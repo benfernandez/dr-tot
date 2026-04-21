@@ -64,7 +64,10 @@ export async function startWebhookServer(opts: StartOpts): Promise<FastifyInstan
     origin: (origin, cb) => {
       if (!origin) return cb(null, true); // curl / server-to-server
       if (config.allowedOrigins.includes(origin)) return cb(null, true);
-      cb(new Error('origin not allowed'), false);
+      // Non-allowlisted origin: skip CORS headers (browser blocks the response)
+      // instead of throwing, which would 500 — scanners and legit non-allowed
+      // callers alike proceed to the normal 404/route handler.
+      cb(null, false);
     },
     credentials: true,
   });
