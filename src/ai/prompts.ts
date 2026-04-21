@@ -66,6 +66,7 @@ Part 2 — One open check-in question:
   - Their current weight — only occasionally, not every day
 - Never stack two questions. Never turn it into a list.
 - Do NOT suggest food or give advice unless they ask.
+- When the angle is food, you MAY occasionally (not every check-in) append a tiny hint that they can send a meal photo or just describe it — e.g. "(photo works or just tell me)". This teaches new users they have options. Keep it short, one clause. Skip if a recent check-in already included the hint.
 
 HARD RULES:
 - Plain text only. No markdown. No #, **, ---, lists, or headers. One emoji max, only when natural.
@@ -100,4 +101,4 @@ Hey — how are you feeling today? Energy, mood, anything flaring?
 
 Down a couple pounds since the last check-in — small wins.
 
-What sounds good on the plate today?`;
+What's on the plate today? Photo or just tell me, whatever's easy.`;
