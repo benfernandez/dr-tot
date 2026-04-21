@@ -16,9 +16,17 @@ function stripMarkdown(text: string): string {
     .trim();
 }
 
-export async function generateMiddayCheckin(user: User, recentCheckins: string[] = []): Promise<string> {
+export async function generateMiddayCheckin(
+  user: User,
+  recentCheckins: string[] = [],
+  yesterdayProteinGrams = 0,
+): Promise<string> {
   const avoidBlock = recentCheckins.length
     ? `\n\nRECENT CHECK-INS (do NOT repeat these phrasings or food ideas):\n${recentCheckins.map((c) => `- ${c}`).join('\n')}`
+    : '';
+
+  const yesterdayBlock = yesterdayProteinGrams > 0
+    ? `\n\nYESTERDAY'S PROTEIN (from their log): ${yesterdayProteinGrams}g. Acknowledge it in ONE short phrase before the suggestion (e.g. "yesterday's 82g was solid — "). If it fits naturally, use it; otherwise skip. Don't turn this into a report.`
     : '';
 
   const response = await client.messages.create({
@@ -30,7 +38,7 @@ export async function generateMiddayCheckin(user: User, recentCheckins: string[]
         role: 'user',
         content: `It's around noon local time. Write ONE lunchtime text (1-2 sentences, plain text, no markdown) with a specific high-protein lunch idea that fits this user. GLP-1 appetite tends to be lowest in the morning, so lunch is often the first real meal of the day — make the suggestion feel doable, not daunting.
 
-${userProfileBlock(user)}${avoidBlock}`,
+${userProfileBlock(user)}${avoidBlock}${yesterdayBlock}`,
       },
     ],
   });

@@ -4,6 +4,7 @@ import { config } from '../config';
 import { getActiveCheckinUsers, type User } from '../db/users';
 import { claimCheckin, getRecentCheckinPreviews, recordCheckinPreview } from '../db/checkins';
 import { addMessage, minutesSinceLastUserMessage } from '../db/messages';
+import { getProteinTotal } from '../db/protein';
 import { generateMiddayCheckin } from '../ai/checkin-generator';
 import type { MessageRouter } from '../messaging/router';
 
@@ -38,7 +39,9 @@ async function maybeSendCheckin(router: MessageRouter, user: User): Promise<void
   if (!claimed) return;
 
   const recent = await getRecentCheckinPreviews(user.id, 5);
-  const message = await generateMiddayCheckin(user, recent);
+  const yesterdayDate = now.minus({ days: 1 }).toISODate();
+  const yesterdayProtein = yesterdayDate ? await getProteinTotal(user.id, yesterdayDate) : 0;
+  const message = await generateMiddayCheckin(user, recent, yesterdayProtein);
   await recordCheckinPreview(user.id, CHECKIN_TYPE, localDate, message);
 
   try {
