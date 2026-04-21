@@ -3,10 +3,12 @@
 # Claude can tail production logs and inspect Supabase state without the human
 # pasting output manually. Runs on every new session — fresh VM each time.
 #
-# Requires (set in the Claude Code web environment, not committed):
-#   RAILWAY_TOKEN        — Railway project token (Project Settings → Tokens).
-#                          Prefer project-scoped over account-scoped.
-#   SUPABASE_ACCESS_TOKEN — Supabase personal access token.
+# Requires (set via the `env` block in .claude/settings.json):
+#   RAILWAY_TOKEN or RAILWAY_API_TOKEN — Railway project token (preferred,
+#       from Project Settings → Tokens) OR account token (from
+#       https://railway.com/account/tokens). Either works for `railway logs`.
+#   SUPABASE_ACCESS_TOKEN — Supabase personal access token
+#       (https://supabase.com/dashboard/account/tokens).
 #   SUPABASE_PROJECT_REF  — the project ref (the xxxx in the dashboard URL).
 #
 # All output goes to stderr so it appears in the session transcript but does
@@ -16,11 +18,13 @@ exec 1>&2
 
 log() { printf '[install-clis] %s\n' "$*"; }
 
-# Skip entirely if neither token is present — lets the hook stay on for people
+RAILWAY_AUTH="${RAILWAY_TOKEN:-${RAILWAY_API_TOKEN:-}}"
+
+# Skip entirely if no tokens are present — lets the hook stay on for people
 # who haven't configured tokens yet without failing the session start.
-if [ -z "${RAILWAY_TOKEN:-}" ] && [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
-  log "no RAILWAY_TOKEN or SUPABASE_ACCESS_TOKEN set — skipping CLI install"
-  log "add them in Claude Code → Settings → Environment Variables to enable"
+if [ -z "$RAILWAY_AUTH" ] && [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+  log "no Railway or Supabase token set — skipping CLI install"
+  log "paste tokens into the 'env' block of .claude/settings.json to enable"
   exit 0
 fi
 
@@ -68,7 +72,7 @@ install_supabase_binary() {
   fi
 }
 
-if [ -n "${RAILWAY_TOKEN:-}" ]; then
+if [ -n "$RAILWAY_AUTH" ]; then
   install_npm_global "@railway/cli" "railway" || true
 fi
 

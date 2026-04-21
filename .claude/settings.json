@@ -1,4 +1,9 @@
 {
+  "env": {
+    "RAILWAY_API_TOKEN": "",
+    "SUPABASE_ACCESS_TOKEN": "",
+    "SUPABASE_PROJECT_REF": ""
+  },
   "hooks": {
     "SessionStart": [
       {
