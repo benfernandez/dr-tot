@@ -90,7 +90,7 @@ export default function Landing() {
             {loading ? 'Loading…' : 'Start 7-day free trial'}
           </button>
           <p style={styles.fineprint}>
-            $19/mo after. Cancel anytime. Msg&data rates may apply.
+            $19.99/mo after. Cancel anytime. Msg&data rates may apply.
             <br />
             <strong>Dr. Tot is not a medical provider.</strong> Not medical advice.
           </p>

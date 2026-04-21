@@ -77,7 +77,7 @@ Free tier: shared number, 10 verified contacts, reply-only (users text first). S
 ### 3. Stripe: product + webhook
 
 1. Dashboard → **Products** → create "Dr. Tot"
-2. Add a **Price**: $19.00 USD, Recurring, Monthly → copy the Price ID (`price_...`) → `STRIPE_PRICE_ID`
+2. Add a **Price**: $19.99 USD, Recurring, Monthly → copy the Price ID (`price_...`) → `STRIPE_PRICE_ID`
 3. Dashboard → **Developers → Webhooks** → add endpoint: `https://api.doctortot.com/webhooks/stripe`
 4. Subscribe to events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_succeeded`, `invoice.payment_failed`
 5. Copy **Signing Secret** → `STRIPE_WEBHOOK_SECRET`
@@ -173,7 +173,7 @@ Pre-authorizes a number. **Fails on free tier** (no cold outbound). On paid tier
 - **Intent extraction**: `claude-haiku-4-5` in background on every user text
 - **Vision**: `claude-sonnet-4-6` for meal photos (~$0.003 per image, low-res)
 
-Expected cost at 200 active subs: ~$250/mo Claude + $100/mo Sendblue + $35/mo Supabase + Railway + Vercel + Stripe fees. Net margin at $19/mo pricing: ~87-88%.
+Expected cost at 200 active subs: ~$250/mo Claude + $100/mo Sendblue + $35/mo Supabase + Railway + Vercel + Stripe fees. Net margin at $19.99/mo pricing: ~87-88%.
 
 ## Architecture
 

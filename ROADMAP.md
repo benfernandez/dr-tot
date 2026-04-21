@@ -36,7 +36,7 @@ Living plan. Order is a recommendation, not a contract. Revise after each phase 
 - [ ] End-to-end paid test using `4242 4242 4242 4242`
 - [ ] Flip Stripe Test → Live mode
 
-**Cost:** ~$2.20/user/mo at moderate chat + photos. Gross margin at $19/mo ≈ 88%. Unit economics work from user ~6 onwards.
+**Cost:** ~$2.20/user/mo at moderate chat + photos. Gross margin at $19.99/mo ≈ 88%. Unit economics work from user ~6 onwards.
 
 ---
 
@@ -155,7 +155,7 @@ Only if Phase 3 shows >30% trial→paid and meaningful organic word-of-mouth.
 - **Day-7 retention:** >25%.
 - **Messages/user/week:** >5 = sticky. <2 = notification fatigue or wrong audience.
 - **Trial → paid conversion:** >30% healthy. <20% → pricing or activation step broken, not product.
-- **Meta CPA:** aim <$72 for healthy 3:1 LTV/CAC at $19/mo × 8-month retention.
+- **Meta CPA:** aim <$72 for healthy 3:1 LTV/CAC at $19.99/mo × 8-month retention.
 - **Day-7 `Subscribe` CAPI event fires / day-7 `Purchase` CAPI events:** same as trial→paid, seen through Meta's lens. Should match within a few percent.
 
 ---
