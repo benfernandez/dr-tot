@@ -2,7 +2,7 @@
 
 AI nutrition companion for GLP-1 medication users (Ozempic, Wegovy, Mounjaro, Zepbound). Text-first over iMessage with SMS fallback, paid via Stripe, funnel optimized for Meta ads.
 
-**Status:** v0.4 — funnel live in test mode. Stripe Checkout + webhook wired and verified end-to-end, Meta CAPI firing Purchase/InitiateCheckout with browser↔server event dedup, Next.js landing page, account portal with magic-code auth, Sendblue iMessage backend. Noon check-in generator summarizes the past 23 hours of chat instead of structured signals. No buttons, no slash commands — users just text and send photos.
+**Status:** v0.4 — funnel live in test mode. Stripe Checkout + webhook wired and verified end-to-end, Meta CAPI firing Purchase/InitiateCheckout with browser↔server event dedup, Next.js landing page, account portal with magic-code auth, Sendblue iMessage backend. Noon check-in generator summarizes the past 24 hours of chat instead of structured signals. No buttons, no slash commands — users just text and send photos.
 
 ## Monorepo layout
 
@@ -19,7 +19,7 @@ AI nutrition companion for GLP-1 medication users (Ozempic, Wegovy, Mounjaro, Ze
 - **Onboarding** is conversational: Claude Haiku drives a 4-6 turn back-and-forth, extracts medication / side effects / goal / timezone into JSON, merges opportunistically until complete
 - **Chat** runs Claude Sonnet with prompt caching on system + user profile. SMS-short replies (1-2 segments) enforced by the system prompt
 - **Photos** → Sonnet vision identifies the meal, estimates protein, auto-logs to `protein_log`, folds into the chat reply as context
-- **Morning check-in** fires at the user's local `CHECKIN_HOUR` (default noon) for onboarded users. The prompt summarizes the past 23 hours of chat into one casual sentence (Part 1) plus one open check-in question (Part 2, rotating between how-they-feel / what-they're-eating / weight). Claim-before-generate idempotency in `checkin_log` prevents redeploy-overlap workers from double-spending Anthropic.
+- **Morning check-in** fires at the user's local `CHECKIN_HOUR` (default noon) for onboarded users. The prompt summarizes the past 24 hours of chat into one casual sentence (Part 1) plus one open check-in question (Part 2, rotating between how-they-feel / what-they're-eating / weight). Claim-before-generate idempotency in `checkin_log` prevents redeploy-overlap workers from double-spending Anthropic.
 - **Destructive actions** (delete / cancel / wipe history / export) never execute from text — redirect to `app.doctortot.com/account` where magic-code auth protects them
 - **Opt-out** (`STOP`) is carrier-mandated and honored instantly; cancels any pending debounced turn
 

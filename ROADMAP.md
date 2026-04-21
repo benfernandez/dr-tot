@@ -12,7 +12,7 @@ Living plan. Order is a recommendation, not a contract. Revise after each phase 
 - Claude Sonnet chat with prompt caching on system + profile, enforced 1-2 segment SMS-short replies
 - Claude vision on meal photos: auto-classifies food / body / other; food → protein estimate + auto-log, body → warm decline (ED-risk guardrail), other → "meal photos work better" nudge
 - HEIC decode pipeline (iPhone default photo format → JPEG before vision call)
-- Noon-local proactive check-in. Summarizes the past 23h of chat in one sentence (Part 1) + one open question rotating between how-they-feel / what-they're-eating / weight (Part 2). Claim-before-generate idempotency.
+- Noon-local proactive check-in. Summarizes the past 24h of chat in one sentence (Part 1) + one open question rotating between how-they-feel / what-they're-eating / weight (Part 2). Claim-before-generate idempotency.
 - Debounce (3s window) collapses burst messages into one Claude call
 - Per-user rate limit 30/hr + typing indicator fired immediately on inbound
 - Destructive intent (delete / cancel / wipe) never executes from text — redirects to the web portal

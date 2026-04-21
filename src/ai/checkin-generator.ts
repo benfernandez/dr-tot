@@ -27,7 +27,7 @@ function chatHistoryBlock(messages: Message[]): string {
     .map((m) => `[${m.role}]: ${m.content.trim()}`)
     .join('\n');
 
-  return `\n\nPAST 23 HOURS OF CONVERSATION:\n${formatted}\n
+  return `\n\nPAST 24 HOURS OF CONVERSATION:\n${formatted}\n
 Use this for Part 1 of the check-in: in ONE short casual sentence, reference the most notable thing from these exchanges (a side effect they mentioned, a food they had, a win, a rough moment, weight, movement — whatever stands out). Draw from their own words, not clinical summaries. If nothing notable stands out or the history is thin, skip Part 1 entirely.`;
 }
 
@@ -49,10 +49,10 @@ export async function generateMiddayCheckin(
         role: 'user',
         content: `It's around noon local time. Write a check-in text with this shape:
 
-Part 1 (only if the past 23 hours of chat contains something notable): ONE casual sentence referencing the most notable thing from their own words yesterday. Then a blank line.
+Part 1 (only if the past 24 hours of chat contains something notable): ONE casual sentence referencing the most notable thing from their own words yesterday. Then a blank line.
 Part 2 (always): ONE open check-in question about today — pick ONE angle (how they feel, what they're eating, or occasionally weight). Do not stack questions. Do not suggest food unless asked.
 
-If the past 23 hours has no chat or nothing worth referencing, skip Part 1 entirely and write only the question.
+If the past 24 hours has no chat or nothing worth referencing, skip Part 1 entirely and write only the question.
 
 ${userProfileBlock(user)}${avoidBlock}${chatHistoryBlock(chatHistory)}`,
       },

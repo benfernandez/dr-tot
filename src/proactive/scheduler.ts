@@ -13,7 +13,7 @@ const log = logger.child({ module: 'scheduler' });
 
 const WINDOW_MINUTES = 30;
 const CHECKIN_TYPE = 'midday' as const;
-const HISTORY_WINDOW_HOURS = 23;
+const HISTORY_WINDOW_HOURS = 24;
 
 function isFrequencyAllowed(freq: User['checkin_frequency'], weekday: number): boolean {
   if (freq === 'none') return false;
