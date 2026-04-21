@@ -4,7 +4,7 @@ Living plan. Order is a recommendation, not a contract. Revise after each phase 
 
 ---
 
-## Where we are (v0.3 — funnel wired, awaiting setup)
+## Where we are (v0.4 — funnel live in test mode)
 
 **Product**
 - SMS/iMessage bot via SendBlue (free tier today → AI Agent $100/mo at scale)
@@ -12,7 +12,7 @@ Living plan. Order is a recommendation, not a contract. Revise after each phase 
 - Claude Sonnet chat with prompt caching on system + profile, enforced 1-2 segment SMS-short replies
 - Claude vision on meal photos: auto-classifies food / body / other; food → protein estimate + auto-log, body → warm decline (ED-risk guardrail), other → "meal photos work better" nudge
 - HEIC decode pipeline (iPhone default photo format → JPEG before vision call)
-- Noon-local proactive check-in, lunch-focused prompt, claim-before-generate idempotency
+- Noon-local proactive check-in. Summarizes the past 23h of chat in one sentence (Part 1) + one open question rotating between how-they-feel / what-they're-eating / weight (Part 2). Claim-before-generate idempotency.
 - Debounce (3s window) collapses burst messages into one Claude call
 - Per-user rate limit 30/hr + typing indicator fired immediately on inbound
 - Destructive intent (delete / cancel / wipe) never executes from text — redirects to the web portal
@@ -31,9 +31,11 @@ Living plan. Order is a recommendation, not a contract. Revise after each phase 
 - Activation flow: paid-user first text → auto-activate (consent from Stripe TCPA checkbox), fire CompleteRegistration, jump to onboarding
 
 **What's still TODO to go live:**
-- [ ] Stripe product + keys + webhook wired in Railway env
-- [ ] Meta Pixel + CAPI token + domain verification + AEM priority events
-- [ ] End-to-end paid test using `4242 4242 4242 4242`
+- [x] Stripe product + keys + webhook wired in Railway env
+- [x] Meta Pixel + CAPI token + domain verification
+- [ ] AEM priority events (deferred — only matters once Ad Account exists in Phase 2)
+- [x] End-to-end paid test using `4242 4242 4242 4242` (Stripe + Meta CAPI confirmed via Test Events tab; browser↔server dedup on InitiateCheckout)
+- [ ] Full self-test through all 14 steps (landing → Stripe → thanks → first text → onboarding → chat → photo → noon check-in → cancel). Script: `supabase/queries/phase1-funnel-healthcheck.sql`.
 - [ ] Flip Stripe Test → Live mode
 
 **Cost:** ~$2.20/user/mo at moderate chat + photos. Gross margin at $19.99/mo ≈ 88%. Unit economics work from user ~6 onwards.
@@ -49,7 +51,7 @@ Goal: 3-10 real GLP-1 users texting the bot for 2 weeks. Measure: do they come b
 - [x] Conversational onboarding works end-to-end
 - [x] Photo flow works (HEIC decode + food/body/other classification)
 - [x] Noon check-in fires in user timezone
-- [ ] Wire Stripe + Meta (day-of, before inviting anyone who'll actually pay)
+- [x] Wire Stripe + Meta (day-of, before inviting anyone who'll actually pay)
 - [ ] Add 3-5 real friends as Sendblue verified contacts (free tier: 10 max)
 - [ ] Share the Sendblue number with them ("text +1… and try Dr. Tot")
 - [ ] Run through all chat / photo / check-in paths with at least 2 friends
