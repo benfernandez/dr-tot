@@ -40,14 +40,15 @@ export async function startWebhookServer(opts: StartOpts): Promise<FastifyInstan
 
   app.addHook('onResponse', (req, reply, done) => {
     const s = reply.statusCode;
-    // Always log 5xx (our bugs) and successful interactions with our real
-    // routes. Drop 404s on unknown paths — they're scanner noise. 401s on
-    // webhook signature failures ARE worth keeping so we see if Sendblue or
-    // Stripe ever send us something we can't verify.
-    const isInteresting =
-      s >= 500 ||
-      s === 401 ||
-      (s < 400 && !req.url.startsWith('/404'));
+    // Log every request to our real routes (incl. 4xx so we catch URL typos
+    // from Sendblue/Stripe — a 404 from a wrong webhook path is invisible
+    // otherwise). Also log 5xx and 401s on any path. Drop everything else
+    // (scanner noise on /.env, /phpinfo.php, etc.).
+    const isOurRoute =
+      req.url.startsWith('/webhooks/') ||
+      req.url.startsWith('/api/') ||
+      req.url === '/health';
+    const isInteresting = s >= 500 || s === 401 || isOurRoute;
     if (!isInteresting) return done();
     req.log.info(
       { method: req.method, url: req.url, statusCode: s, responseTime: reply.elapsedTime },
