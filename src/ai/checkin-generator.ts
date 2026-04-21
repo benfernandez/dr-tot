@@ -40,7 +40,7 @@ function yesterdayBlock(y: YesterdaySignals): string {
   if (!parts.length) return '';
 
   return `\n\nYESTERDAY'S LOG (silently extracted from their chat):\n- ${parts.join('\n- ')}\n
-Pick ONE signal that's most relevant today and reference it in a single short phrase before the lunch suggestion (e.g. "solid 82g yesterday — ", "rough nausea day yesterday, so keeping it gentle — "). Do NOT list everything. Do NOT turn this into a report. Skip entirely if nothing fits naturally.`;
+Use this for Part 1 of the check-in: pick the ONE most notable signal and acknowledge it in one short casual sentence. Do not list everything. Do not turn this into a report.`;
 }
 
 export async function generateMiddayCheckin(
@@ -54,12 +54,17 @@ export async function generateMiddayCheckin(
 
   const response = await client.messages.create({
     model: config.checkinModel,
-    max_tokens: 140,
+    max_tokens: 180,
     system: CHECKIN_SYSTEM,
     messages: [
       {
         role: 'user',
-        content: `It's around noon local time. Write ONE lunchtime text (1-2 sentences, plain text, no markdown) with a specific high-protein lunch idea that fits this user. GLP-1 appetite tends to be lowest in the morning, so lunch is often the first real meal of the day — make the suggestion feel doable, not daunting.
+        content: `It's around noon local time. Write a check-in text with this shape:
+
+Part 1 (only if yesterday has signals): ONE casual sentence acknowledging yesterday's most notable signal. Then a blank line.
+Part 2 (always): ONE open check-in question about today — pick ONE angle (how they feel, what they're eating, or occasionally weight). Do not stack questions. Do not suggest food unless asked.
+
+If yesterday has no signals, skip Part 1 entirely and write only the question.
 
 ${userProfileBlock(user)}${avoidBlock}${yesterdayBlock(yesterday)}`,
       },
@@ -67,6 +72,6 @@ ${userProfileBlock(user)}${avoidBlock}${yesterdayBlock(yesterday)}`,
   });
 
   const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
-  const raw = textBlock?.text ?? "Hey — a rotisserie chicken + cottage cheese + apple combo = ~30g protein and zero cooking. How's the appetite today?";
+  const raw = textBlock?.text ?? "Hey — how's the day landing so far? Appetite, energy, anything flaring?";
   return stripMarkdown(raw);
 }
