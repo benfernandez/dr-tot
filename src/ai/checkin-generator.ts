@@ -1,18 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config';
 import type { User } from '../db/users';
-import type { FeelingTag } from '../db/feelings';
-import type { ActivityEntry } from '../db/activity';
+import type { Message } from '../db/messages';
 import { CHECKIN_SYSTEM, userProfileBlock } from './prompts';
 
 const client = new Anthropic({ apiKey: config.anthropicKey });
-
-export interface YesterdaySignals {
-  proteinGrams: number;
-  weightPounds: number | null;
-  feelings: FeelingTag[];
-  activity: ActivityEntry[];
-}
 
 function stripMarkdown(text: string): string {
   return text
@@ -25,48 +17,44 @@ function stripMarkdown(text: string): string {
     .trim();
 }
 
-function yesterdayBlock(y: YesterdaySignals): string {
-  const parts: string[] = [];
-  if (y.proteinGrams > 0) parts.push(`protein: ${y.proteinGrams}g`);
-  if (y.weightPounds != null) parts.push(`weigh-in: ${y.weightPounds} lb`);
-  if (y.feelings.length) parts.push(`side effects mentioned: ${y.feelings.join(', ').replace(/_/g, ' ')}`);
-  if (y.activity.length) {
-    const summary = y.activity
-      .map((a) => (a.minutes ? `${a.label} (${a.minutes}m)` : a.label))
-      .join(', ');
-    parts.push(`movement: ${summary}`);
-  }
+function chatHistoryBlock(messages: Message[]): string {
+  // Drop proactive check-ins — no value in re-summarizing the bot's own nudges.
+  // Keep user + assistant turns so the model sees both sides of the conversation.
+  const relevant = messages.filter((m) => m.role !== 'proactive');
+  if (!relevant.length) return '';
 
-  if (!parts.length) return '';
+  const formatted = relevant
+    .map((m) => `[${m.role}]: ${m.content.trim()}`)
+    .join('\n');
 
-  return `\n\nYESTERDAY'S LOG (silently extracted from their chat):\n- ${parts.join('\n- ')}\n
-Use this for Part 1 of the check-in: pick the ONE most notable signal and acknowledge it in one short casual sentence. Do not list everything. Do not turn this into a report.`;
+  return `\n\nPAST 23 HOURS OF CONVERSATION:\n${formatted}\n
+Use this for Part 1 of the check-in: in ONE short casual sentence, reference the most notable thing from these exchanges (a side effect they mentioned, a food they had, a win, a rough moment, weight, movement — whatever stands out). Draw from their own words, not clinical summaries. If nothing notable stands out or the history is thin, skip Part 1 entirely.`;
 }
 
 export async function generateMiddayCheckin(
   user: User,
   recentCheckins: string[] = [],
-  yesterday: YesterdaySignals = { proteinGrams: 0, weightPounds: null, feelings: [], activity: [] },
+  chatHistory: Message[] = [],
 ): Promise<string> {
   const avoidBlock = recentCheckins.length
-    ? `\n\nRECENT CHECK-INS (do NOT repeat these phrasings or food ideas):\n${recentCheckins.map((c) => `- ${c}`).join('\n')}`
+    ? `\n\nRECENT CHECK-INS (do NOT repeat these phrasings):\n${recentCheckins.map((c) => `- ${c}`).join('\n')}`
     : '';
 
   const response = await client.messages.create({
     model: config.checkinModel,
-    max_tokens: 180,
+    max_tokens: 200,
     system: CHECKIN_SYSTEM,
     messages: [
       {
         role: 'user',
         content: `It's around noon local time. Write a check-in text with this shape:
 
-Part 1 (only if yesterday has signals): ONE casual sentence acknowledging yesterday's most notable signal. Then a blank line.
+Part 1 (only if the past 23 hours of chat contains something notable): ONE casual sentence referencing the most notable thing from their own words yesterday. Then a blank line.
 Part 2 (always): ONE open check-in question about today — pick ONE angle (how they feel, what they're eating, or occasionally weight). Do not stack questions. Do not suggest food unless asked.
 
-If yesterday has no signals, skip Part 1 entirely and write only the question.
+If the past 23 hours has no chat or nothing worth referencing, skip Part 1 entirely and write only the question.
 
-${userProfileBlock(user)}${avoidBlock}${yesterdayBlock(yesterday)}`,
+${userProfileBlock(user)}${avoidBlock}${chatHistoryBlock(chatHistory)}`,
       },
     ],
   });

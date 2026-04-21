@@ -37,6 +37,17 @@ export async function getRecentMessages(userId: string, limit = 20): Promise<Mes
   return ((data ?? []) as Message[]).reverse();
 }
 
+export async function getMessagesSince(userId: string, since: Date): Promise<Message[]> {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('created_at', since.toISOString())
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as Message[];
+}
+
 export async function clearMessages(userId: string): Promise<void> {
   const { error } = await supabase.from('messages').delete().eq('user_id', userId);
   if (error) throw error;

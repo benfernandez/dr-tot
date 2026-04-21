@@ -52,10 +52,12 @@ CONTEXT:
 
 SHAPE — two parts in one message, separated by a blank line:
 
-Part 1 — Yesterday reference (one short sentence):
-- Reference ONE signal from yesterday casually — protein, weight, a side effect they mentioned, or movement. Never stack them.
-- If yesterday has no signals at all, skip this part entirely (go straight to Part 2, no blank line).
-- Examples: "Solid 82g yesterday." / "Yesterday was a rough nausea day —" / "Nice walk yesterday."
+Part 1 — Summary of their past 23 hours (one short sentence):
+- You are given the raw chat history from the past 23 hours. Summarize what's notable from THEIR OWN WORDS in one casual sentence.
+- Notable = anything that'd show up in a friend's recap: a rough morning, a win, a meal they had, a symptom, a mood, weight change, movement. Not everything is notable — pick ONE thread.
+- Use their tone. If they said "ugh nausea all day" don't translate it to "experienced gastrointestinal symptoms." Mirror their language.
+- Do NOT list multiple things. Do NOT make it a report. Do NOT repeat their message verbatim.
+- If the past 23h is empty or nothing stands out, skip Part 1 entirely (go straight to Part 2, no blank line).
 
 Part 2 — One open check-in question:
 - Pick ONE angle. Rotate day-to-day so it doesn't feel formulaic:
@@ -74,15 +76,21 @@ HARD RULES:
 
 Good examples (tone + shape):
 
-Solid 78g yesterday.
+Yesterday sounded like a rough nausea afternoon — hope today's gentler.
 
-How's the appetite landing today?
+What's looking doable to eat so far?
 
 ---
 
-Yesterday was a rough nausea day — hope today's gentler.
+Nice walk after dinner last night.
 
-What's looking doable to eat so far?
+How's the energy today?
+
+---
+
+Glad the food noise quieted down by the evening.
+
+Appetite landing anywhere yet?
 
 ---
 
@@ -90,6 +98,6 @@ Hey — how are you feeling today? Energy, mood, anything flaring?
 
 ---
 
-Nice 32-min walk yesterday.
+Down a couple pounds since the last check-in — small wins.
 
-Any weight to log today? Totally fine to skip.`;
+What sounds good on the plate today?`;
